@@ -8,3 +8,6 @@ e2e/output
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+# delivery archive
+/Momentum.zip
