@@ -56,7 +56,7 @@ function LogControl({ activity, occ, value, setValue }: { activity: Activity; oc
   return (
     <div className="log-control">
       <div className="log-row">
-        <button className="icon-btn bordered" onClick={() => setValue(Math.max(0, +(value - step).toFixed(2)))} aria-label="−">
+        <button type="button" className="icon-btn bordered" onClick={() => setValue(Math.max(0, +(value - step).toFixed(2)))} aria-label="−">
           <Minus size={18} />
         </button>
         <div className="log-value">
@@ -75,22 +75,22 @@ function LogControl({ activity, occ, value, setValue }: { activity: Activity; oc
             {unit} · {t('occ.target', { value: amount(activity, occ.target) })}
           </span>
         </div>
-        <button className="icon-btn bordered" onClick={() => setValue(+(value + step).toFixed(2))} aria-label="+">
+        <button type="button" className="icon-btn bordered" onClick={() => setValue(+(value + step).toFixed(2))} aria-label="+">
           <Plus size={18} />
         </button>
       </div>
       <Bar value={pct} className={pct >= 1 ? 'success' : ''} />
       <div className="chips log-chips">
         {stepsFor(activity).map((s) => (
-          <button key={s} className="chip" onClick={() => setValue(+(value + s).toFixed(2))}>
+          <button type="button" key={s} className="chip" onClick={() => setValue(+(value + s).toFixed(2))}>
             +{fmt.number(s)} {unit}
           </button>
         ))}
-        <button className="chip" onClick={() => setValue(occ.target)}>
+        <button type="button" className="chip" onClick={() => setValue(occ.target)}>
           <Check size={14} /> {t('occ.goalReached')}
         </button>
         {value > 0 && (
-          <button className="chip" onClick={() => setValue(0)}>
+          <button type="button" className="chip" onClick={() => setValue(0)}>
             {t('occ.clear')}
           </button>
         )}

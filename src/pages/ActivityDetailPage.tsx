@@ -56,7 +56,7 @@ export function ActivityDetailPage({ id }: { id: string }) {
     )
   }
 
-  const archived = !!a.archivedAt && a.archivedAt <= today
+  const archived = !!a.archivedAt
   const streak = data.allTime.streak
   const current = a.schedule[a.schedule.length - 1]
   const cat = a.categoryId ? index.categoryById.get(a.categoryId) : undefined
@@ -190,7 +190,7 @@ export function ActivityDetailPage({ id }: { id: string }) {
         </section>
 
         <section className="section">
-          <h2 className="section-title">{t('detail.plan')}</h2>
+          <h2 className="section-title">{a.schedule.length > 1 ? t('detail.history') : t('detail.plan')}</h2>
           <ul className="mini-list surface">
             {a.schedule.map((s, i) => (
               <li key={s.from + i}>

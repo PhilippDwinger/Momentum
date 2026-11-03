@@ -43,7 +43,7 @@ export function ActivitiesPage() {
   const list = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return index.activities.filter((a) => {
-      const archived = !!a.archivedAt && a.archivedAt <= today
+      const archived = !!a.archivedAt
       if (status === 'active' && archived) return false
       if (status === 'archived' && !archived) return false
       if (category && (category === 'none' ? a.categoryId !== null : a.categoryId !== category)) return false
@@ -75,7 +75,7 @@ export function ActivitiesPage() {
     const seg = segmentFor(a, today < a.startDate ? a.startDate : today) ?? a.schedule[a.schedule.length - 1]
     const streak = game.streaks.get(a.id)
     const next = nextScheduledDates(a, today, 1)[0]
-    const archived = !!a.archivedAt && a.archivedAt <= today
+    const archived = !!a.archivedAt
     const ended = !archived && a.endDate && a.endDate < today
     return (
       <li key={a.id}>
