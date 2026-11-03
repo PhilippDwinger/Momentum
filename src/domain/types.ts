@@ -85,10 +85,13 @@ export interface RecurrenceRule {
 /**
  * A schedule segment applies from `from` (inclusive) until the next segment starts.
  * "Edit this and future occurrences" appends a new segment instead of rewriting history.
- * `from` is also the anchor for interval-based rules (every 2 weeks, every 3 days …).
+ * `anchor` (default: `from`) aligns interval-based rules (every 2 weeks, every 3 days …). When a
+ * later segment keeps the same frequency and interval, it inherits the anchor so the rhythm
+ * does not shift.
  */
 export interface ScheduleSegment {
   from: DateKey
+  anchor?: DateKey
   rule: RecurrenceRule
   /** Target value for occurrences in this segment (check: always 1). */
   target: number

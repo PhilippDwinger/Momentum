@@ -50,13 +50,14 @@ export function useOccurrenceActions() {
   const complete = useCallback(
     async (occ: Occurrence, value: number, note?: string) => {
       const prev = occ.entry?.value ?? 0
+      const prevNote = occ.entry?.note ?? ''
       try {
         await logProgress(occ, value, today, note)
         const done = value >= occ.target
         if (done && !isDone(occ)) {
           toast({
             message: t('toast.done', { name: nameOf(occ) }),
-            action: { label: t('common.undo'), run: () => void logProgress(occ, prev, today).catch(fail) },
+            action: { label: t('common.undo'), run: () => void logProgress(occ, prev, today, prevNote).catch(fail) },
           })
         }
       } catch (e) {

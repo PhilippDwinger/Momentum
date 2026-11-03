@@ -1,6 +1,6 @@
 import { addDays } from '../domain/dates'
 import { challengeId, proposeChallenges } from '../domain/gamification'
-import { isDone, occKey, type DataIndex } from '../domain/occurrences'
+import { isDone, occurrencesOn, type DataIndex } from '../domain/occurrences'
 import { normalizeRule, scheduleWithChangeFrom } from '../domain/recurrence'
 import type {
   Activity,
@@ -39,11 +39,21 @@ export function getRepository(): LocalRepository {
 
 type NoMeta<T> = Omit<T, keyof SyncMeta> & { id: ID }
 
+/** Version used for seeded defaults: lower than any real change, so it never wins a merge. */
+export const SEED_VERSION = '000000000000000:0000:seed'
+
+/**
+ * Seeds the built-in categories once per device. Seeds are written with the lowest possible
+ * version and are NOT logged to the outbox: user edits (or the same seeds from another device)
+ * always win, and a fresh device can never overwrite renamed/deleted categories via sync/import.
+ */
 export async function ensureSeeded(): Promise<void> {
   const r = getRepository()
   const seeded = await r.db.meta.get('seeded')
   if (seeded) return
-  if ((await r.db.categories.count()) === 0) await r.putMany('categories', builtinCategoryRecords())
+  if ((await r.db.categories.count()) === 0) {
+    await r.db.categories.bulkPut(builtinCategoryRecords().map((c) => ({ ...c, createdAt: 0, updatedAt: 0, version: SEED_VERSION, deletedAt: null })))
+  }
   await r.db.meta.put({ key: 'seeded', value: true })
 }
 
@@ -70,7 +80,12 @@ export interface ActivityDraft {
   notes: string
 }
 
-export type ScheduleScope = { mode: 'all' } | { mode: 'from'; from: DateKey }
+/**
+ * keep: schedule untouched (only name/icon/notes … changed)
+ * all:  replace the whole schedule (explicit "entire series")
+ * from: new segment from a date ("this and future"), history untouched
+ */
+export type ScheduleScope = { mode: 'keep' } | { mode: 'all' } | { mode: 'from'; from: DateKey }
 
 function cleanDraft(d: ActivityDraft) {
   const target = d.kind === 'check' ? 1 : Math.max(0.01, Number(d.target) || 1)
@@ -116,7 +131,9 @@ export async function updateActivity(activity: Activity, draft: ActivityDraft, s
   const { target, rule, ...rest } = c
   let schedule: Activity['schedule']
   let startDate = activity.startDate
-  if (scope.mode === 'all' || scope.from <= activity.startDate) {
+  if (scope.mode === 'keep') {
+    schedule = activity.schedule
+  } else if (scope.mode === 'all' || scope.from <= activity.startDate) {
     startDate = c.startDate
     schedule = [{ from: startDate, rule, target }]
   } else {
@@ -127,8 +144,8 @@ export async function updateActivity(activity: Activity, draft: ActivityDraft, s
 }
 
 export async function archiveActivity(activity: Activity, today: DateKey, index: DataIndex): Promise<void> {
-  // keep today's occurrence if it already has progress
-  const hasProgressToday = !!index.entries.get(occKey(activity.id, today))
+  // keep today's occurrences (incl. ones moved to today) if they already have progress
+  const hasProgressToday = occurrencesOn(index, today, [activity]).some((o) => (o.entry?.value ?? 0) > 0)
   await getRepository().patch<Activity>('activities', activity.id, { archivedAt: hasProgressToday ? addDays(today, 1) : today })
 }
 

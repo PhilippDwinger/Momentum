@@ -79,7 +79,7 @@ function stateToRule(s: RuleState, anchor: DateKey): RecurrenceRule {
     case 'biweekly':
       return { freq: 'weekly', interval: 2, weekdays: s.weekdays }
     case 'monthly':
-      return { freq: 'monthly', interval: 1, monthlyMode: 'day', monthDay: parseKey(anchor).d }
+      return { freq: 'monthly', interval: 1, monthlyMode: 'day', monthDay: s.monthDay || parseKey(anchor).d }
     case 'custom':
       if (s.unit === 'days') return { freq: 'daily', interval: Math.max(1, s.interval) }
       if (s.unit === 'weeks') return { freq: 'weekly', interval: Math.max(1, s.interval), weekdays: s.weekdays }
@@ -240,7 +240,8 @@ export function ActivityEditor({ activityId, date, scopeFrom, template, onClose 
     if (!existing) return persist({ mode: 'all' })
     if (scopeFrom) return persist({ mode: 'from', from: scopeFrom })
     const hasPast = existing.startDate < today && !isOneTime(existing)
-    if (scheduleChanged() && hasPast) {
+    if (!scheduleChanged()) return persist({ mode: 'keep' })
+    if (hasPast) {
       setAskScope(true)
       return
     }
@@ -502,15 +503,11 @@ export function ActivityEditor({ activityId, date, scopeFrom, template, onClose 
               {rs.unit === 'weeks' && weekdayButtons}
               {rs.unit === 'months' && (
                 <div className="seg full" role="group" aria-label={t('editor.monthBy')}>
-                  <button type="button" aria-pressed={rs.monthlyMode === 'day'} onClick={() => setRule({ monthlyMode: 'day', monthDay: parseKey(anchor).d })}>
-                    {t('editor.monthByDay', { day: parseKey(anchor).d })}
+                  <button type="button" aria-pressed={rs.monthlyMode === 'day'} onClick={() => setRule({ monthlyMode: 'day' })}>
+                    {t('editor.monthByDay', { day: rs.monthDay })}
                   </button>
-                  <button
-                    type="button"
-                    aria-pressed={rs.monthlyMode === 'weekday'}
-                    onClick={() => setRule({ monthlyMode: 'weekday', nth: nthInMonth(anchor) > 4 ? -1 : nthInMonth(anchor), nthWeekday: weekday(anchor) })}
-                  >
-                    {t('editor.monthByWeekday', { nth: t(`editor.nth.${nthInMonth(anchor) > 4 ? -1 : nthInMonth(anchor)}`), weekday: fmt.weekdayLong(weekday(anchor)) })}
+                  <button type="button" aria-pressed={rs.monthlyMode === 'weekday'} onClick={() => setRule({ monthlyMode: 'weekday' })}>
+                    {t('editor.monthByWeekday', { nth: t(`editor.nth.${rs.nth}`), weekday: fmt.weekdayLong(rs.nthWeekday) })}
                   </button>
                 </div>
               )}
@@ -521,7 +518,20 @@ export function ActivityEditor({ activityId, date, scopeFrom, template, onClose 
           <div className="row">
             <div className="field">
               <label htmlFor="ed-start">{rs.preset === 'once' ? t('editor.date') : t('editor.startDate')}</label>
-              <input id="ed-start" className="input" type="date" value={d.startDate} disabled={lockedStart} onChange={(e) => e.target.value && set('startDate', e.target.value)} />
+              <input
+                id="ed-start"
+                className="input"
+                type="date"
+                value={d.startDate}
+                disabled={lockedStart}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (!v) return
+                  set('startDate', v)
+                  // for a new activity, monthly rules follow the chosen start date
+                  if (!existing) setRule({ monthDay: parseKey(v).d, nth: nthInMonth(v) > 4 ? -1 : nthInMonth(v), nthWeekday: weekday(v) })
+                }}
+              />
             </div>
             {rs.preset !== 'once' && (
               <div className="field">

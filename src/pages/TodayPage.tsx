@@ -65,13 +65,13 @@ export function TodayPage() {
           <h1 className="page-title">{heading}</h1>
         </div>
         <div className="date-nav">
-          <button className="icon-btn bordered" onClick={() => go(addDays(date, -1))} aria-label={t('common.prev')} title="←">
+          <button className="icon-btn bordered nav-step" onClick={() => go(addDays(date, -1))} aria-label={t('common.prev')} title="←">
             <ChevronLeft size={18} />
           </button>
           <button className="btn btn-sm" onClick={() => go(today)} disabled={isToday}>
             {t('common.today')}
           </button>
-          <button className="icon-btn bordered" onClick={() => go(addDays(date, 1))} aria-label={t('common.next')} title="→">
+          <button className="icon-btn bordered nav-step" onClick={() => go(addDays(date, 1))} aria-label={t('common.next')} title="→">
             <ChevronRight size={18} />
           </button>
           <label className="icon-btn bordered date-pick" title={t('activities.filter.date')}>

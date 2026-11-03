@@ -364,8 +364,19 @@
     padding: 16px;
     gap: 14px;
   }
+  .today-head {
+    position: relative;
+    padding-right: 96px;
+    margin-bottom: 14px;
+  }
   .today-head .date-nav {
-    width: 100%;
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
+  .today-head .nav-step,
+  .today-head .btn:disabled {
+    display: none;
   }
 }
 .sparkle {

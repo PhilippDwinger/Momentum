@@ -967,7 +967,7 @@ svg {
   place-items: center;
   padding: 24px;
   background: rgba(20, 16, 10, 0.42);
-  animation: fade-in 0.18s ease-out;
+  animation: backdrop-in 0.18s ease-out;
 }
 .modal {
   width: min(100%, 560px);
@@ -1052,9 +1052,9 @@ svg {
     flex: 1;
   }
 }
-@keyframes fade-in {
+@keyframes backdrop-in {
   from {
-    opacity: 0;
+    background: rgba(20, 16, 10, 0);
   }
 }
 @keyframes pop-in {

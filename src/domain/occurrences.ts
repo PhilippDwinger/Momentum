@@ -1,5 +1,5 @@
 import { parseTime } from './dates'
-import { isScheduled, scheduledDates, targetFor } from './recurrence'
+import { isActiveOn, ruleScheduled, scheduledDates, targetFor } from './recurrence'
 import type {
   Activity,
   Category,
@@ -91,7 +91,8 @@ function makeOccurrence(index: DataIndex, a: Activity, originalDate: DateKey, un
     activityId: a.id,
     originalDate,
     date,
-    target: override?.target ?? targetFor(a, originalDate),
+    // per-occurrence override > snapshot stored with logged progress > current plan
+    target: override?.target ?? (entry && entry.target > 0 ? entry.target : targetFor(a, originalDate)),
     time: override?.time ?? a.time,
     moved: date !== originalDate,
     skipped: !!override?.skipped,
@@ -105,7 +106,7 @@ function makeOccurrence(index: DataIndex, a: Activity, originalDate: DateKey, un
 export function getOccurrence(index: DataIndex, activityId: ID, originalDate: DateKey): Occurrence | null {
   const a = index.activityById.get(activityId)
   if (!a) return null
-  const scheduled = isScheduled(a, originalDate)
+  const scheduled = ruleScheduled(a, originalDate)
   const entry = index.entries.get(occKey(activityId, originalDate))
   if (!scheduled && !(entry && entry.value > 0)) return null
   return makeOccurrence(index, a, originalDate, !scheduled)
@@ -122,25 +123,33 @@ export function activityOccurrences(index: DataIndex, a: Activity, from: DateKey
   for (const d of scheduledDates(a, from, to)) {
     const occ = makeOccurrence(index, a, d)
     seen.add(occ.key)
-    if (occ.date >= from && occ.date <= to) out.push(occ)
+    // archive cutoff applies to the effective date (a moved occurrence follows its new date)
+    if (occ.date >= from && occ.date <= to && isActiveOn(a, occ.date)) out.push(occ)
   }
   for (const mv of index.movesByActivity.get(a.id) ?? []) {
     const target = mv.movedTo!
-    if (target < from || target > to) continue
+    if (target < from || target > to || !isActiveOn(a, target)) continue
     const key = occKey(a.id, mv.date)
-    if (seen.has(key) || !isScheduled(a, mv.date)) continue
+    if (seen.has(key) || !ruleScheduled(a, mv.date)) continue
     seen.add(key)
     out.push(makeOccurrence(index, a, mv.date))
   }
   for (const e of index.entriesByActivity.get(a.id) ?? []) {
     if (e.date < from || e.date > to || e.value <= 0) continue
     const key = occKey(a.id, e.date)
-    if (seen.has(key) || isScheduled(a, e.date)) continue
+    if (seen.has(key) || ruleScheduled(a, e.date)) continue
     seen.add(key)
     out.push(makeOccurrence(index, a, e.date, true))
   }
   out.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : x.originalDate < y.originalDate ? -1 : 1))
   return out
+}
+
+/** Earliest effective date any occurrence of the activity can have (start or an earlier move). */
+export function firstDateOf(index: DataIndex, a: Activity): DateKey {
+  let min = a.startDate
+  for (const mv of index.movesByActivity.get(a.id) ?? []) if (mv.movedTo && mv.movedTo < min) min = mv.movedTo
+  return min
 }
 
 /** Occurrences of all (or the given) activities in a date range, grouped by effective date. */

@@ -1,6 +1,7 @@
 import { addDays, addMonths, diffDays, rangeKeys, startOfMonth, startOfWeek, weekday } from './dates'
 import {
   activityOccurrences,
+  firstDateOf,
   isDone,
   isPlanned,
   occurrencesByDate,
@@ -196,7 +197,8 @@ export interface ActivityStats {
 }
 
 export function activityStats(index: DataIndex, a: Activity, from: DateKey, today: DateKey): ActivityStats {
-  const start = from < a.startDate ? a.startDate : from
+  const first = firstDateOf(index, a)
+  const start = from < first ? first : from
   const occs = start <= today ? activityOccurrences(index, a, start, today) : []
   const byDate = new Map<DateKey, Occurrence[]>()
   for (const o of occs) byDate.set(o.date, [...(byDate.get(o.date) ?? []), o])
@@ -246,7 +248,10 @@ export function totalCompleted(index: DataIndex): number {
 
 export function earliestStart(index: DataIndex, fallback: DateKey): DateKey {
   let min = fallback
-  for (const a of index.activities) if (a.startDate < min) min = a.startDate
+  for (const a of index.activities) {
+    const first = firstDateOf(index, a)
+    if (first < min) min = first
+  }
   return min
 }
 

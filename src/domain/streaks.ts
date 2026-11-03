@@ -1,5 +1,5 @@
 import { diffDays } from './dates'
-import { activityOccurrences, countsAsSuccess, type DataIndex } from './occurrences'
+import { activityOccurrences, countsAsSuccess, firstDateOf, type DataIndex } from './occurrences'
 import type { Activity, DateKey } from './types'
 
 /**
@@ -8,8 +8,9 @@ import type { Activity, DateKey } from './types'
  * Today's still-open occurrence never breaks a streak. Future occurrences are ignored.
  *
  * Streak protection (optional, transparent): one missed occurrence per activity within any
- * 7-day window is forgiven while a streak is running. The forgiven occurrence does not add
- * to the streak, it only prevents the reset.
+ * 7-day window is forgiven while a streak is running – and only if there was a success since
+ * the last forgiven miss (so weekly habits cannot be carried by protection alone). The
+ * forgiven occurrence does not add to the streak, it only prevents the reset.
  */
 
 export interface StreakInfo {
@@ -33,13 +34,14 @@ export interface StreakInfo {
 export const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100]
 
 export function computeStreak(index: DataIndex, activity: Activity, today: DateKey): StreakInfo {
-  const occs = activityOccurrences(index, activity, activity.startDate, today)
+  const occs = activityOccurrences(index, activity, firstDateOf(index, activity), today)
   const protection = index.settings.streakProtection
   let current = 0
   let longest = 0
   let lastProtected: DateKey | null = null
   let lastSuccess: DateKey | null = null
   let dueToday = false
+  let successSinceProtect = true
   let totalSuccess = 0
   const protectedDates: DateKey[] = []
   let currentProtected: DateKey[] = []
@@ -50,6 +52,7 @@ export function computeStreak(index: DataIndex, activity: Activity, today: DateK
     if (countsAsSuccess(occ, activity)) {
       current++
       totalSuccess++
+      successSinceProtect = true
       lastSuccess = occ.date
       if (current > longest) longest = current
       for (const m of STREAK_MILESTONES) if (current >= m && !milestones[m]) milestones[m] = occ.date
@@ -61,8 +64,9 @@ export function computeStreak(index: DataIndex, activity: Activity, today: DateK
       continue
     }
     // missed (or partial that does not count)
-    if (protection && current > 0 && (lastProtected === null || diffDays(lastProtected, occ.date) >= 7)) {
+    if (protection && current > 0 && successSinceProtect && (lastProtected === null || diffDays(lastProtected, occ.date) >= 7)) {
       lastProtected = occ.date
+      successSinceProtect = false
       protectedDates.push(occ.date)
       currentProtected.push(occ.date)
       continue

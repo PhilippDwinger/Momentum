@@ -78,16 +78,29 @@ export function segmentFor(activity: Activity, date: DateKey): ScheduleSegment |
   return found
 }
 
-/** Is the activity scheduled (by its rules, ignoring per-occurrence overrides) on `date`? */
-export function isScheduled(activity: Activity, date: DateKey): boolean {
+/**
+ * Does the activity's *plan* contain an occurrence originally dated `date`? Considers start/end,
+ * pauses and schedule segments – but not the archive cutoff, which applies to the effective
+ * (possibly moved) date of an occurrence. See `isScheduled` for the combined check.
+ */
+export function ruleScheduled(activity: Activity, date: DateKey): boolean {
   if (activity.deletedAt) return false
   if (date < activity.startDate) return false
   if (activity.endDate && date > activity.endDate) return false
-  if (activity.archivedAt && date >= activity.archivedAt) return false
   if (activity.pauses?.some((p) => date >= p.from && date <= p.to)) return false
   const seg = segmentFor(activity, date)
   if (!seg) return false
-  return matchesRule(seg.rule, seg.from, date)
+  return matchesRule(seg.rule, seg.anchor ?? seg.from, date)
+}
+
+/** True when an occurrence originally on `date` is active on that same date (not archived). */
+export function isActiveOn(activity: Activity, date: DateKey): boolean {
+  return !activity.archivedAt || date < activity.archivedAt
+}
+
+/** Plan + archive check for an unmoved occurrence on `date`. */
+export function isScheduled(activity: Activity, date: DateKey): boolean {
+  return ruleScheduled(activity, date) && isActiveOn(activity, date)
 }
 
 export function targetFor(activity: Activity, date: DateKey): number {
@@ -96,6 +109,7 @@ export function targetFor(activity: Activity, date: DateKey): number {
 }
 
 /** Scheduled dates in [from, to] (rule-based, without overrides). */
+/** Original dates in [from, to] that are part of the plan (ignores archive and overrides). */
 export function scheduledDates(activity: Activity, from: DateKey, to: DateKey): DateKey[] {
   const out: DateKey[] = []
   let d = from < activity.startDate ? activity.startDate : from
@@ -103,10 +117,10 @@ export function scheduledDates(activity: Activity, from: DateKey, to: DateKey): 
   // `once` short-circuit avoids scanning long ranges.
   if (activity.schedule.length === 1 && activity.schedule[0].rule.freq === 'once') {
     const only = activity.schedule[0].from
-    return only >= d && only <= last && isScheduled(activity, only) ? [only] : []
+    return only >= d && only <= last && ruleScheduled(activity, only) ? [only] : []
   }
   while (d <= last) {
-    if (isScheduled(activity, d)) out.push(d)
+    if (ruleScheduled(activity, d)) out.push(d)
     d = addDays(d, 1)
   }
   return out
@@ -141,19 +155,17 @@ export function scheduleWithChangeFrom(
   target: number,
 ): ScheduleSegment[] {
   const kept = schedule.filter((s) => s.from < from)
-  const next: ScheduleSegment = { from, rule: normalizeRule(rule), target }
-  const out = [...kept, next]
-  // Merge with the previous segment when nothing actually changed.
-  if (kept.length > 0) {
-    const prev = kept[kept.length - 1]
-    if (prev.target === target && JSON.stringify(prev.rule) === JSON.stringify(next.rule) && rule.freq !== 'once' && !hasIntervalAnchor(rule)) {
-      return kept
+  const norm = normalizeRule(rule)
+  const next: ScheduleSegment = { from, rule: norm, target }
+  const prev = kept[kept.length - 1]
+  if (prev) {
+    // Same rhythm -> keep the alignment of interval rules (biweekly, every n days/months).
+    if (norm.freq !== 'once' && prev.rule.freq === norm.freq && prev.rule.interval === norm.interval) {
+      const anchor = prev.anchor ?? prev.from
+      if (anchor !== from) next.anchor = anchor
     }
+    // Nothing changed at all -> no new segment.
+    if (prev.target === target && JSON.stringify(prev.rule) === JSON.stringify(norm) && norm.freq !== 'once') return kept
   }
-  return out
-}
-
-/** Rules whose occurrences depend on the anchor date (interval > 1 or implicit weekday). */
-function hasIntervalAnchor(rule: RecurrenceRule): boolean {
-  return rule.interval > 1 || (rule.freq === 'weekly' && !rule.weekdays?.length)
+  return [...kept, next]
 }

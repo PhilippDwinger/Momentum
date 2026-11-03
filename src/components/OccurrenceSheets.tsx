@@ -282,7 +282,7 @@ export function MoveSheet({ activityId, originalDate, onClose }: Props) {
           <button className="btn" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="btn btn-primary" onClick={() => void submit(date)} disabled={!date || date === occ.date}>
+          <button className="btn btn-primary" onClick={() => void submit(date)} disabled={!date || date === occ.date || date < activity.startDate}>
             {t('occ.move')}
           </button>
         </>
@@ -300,7 +300,7 @@ export function MoveSheet({ activityId, originalDate, onClose }: Props) {
       </div>
       <div className="field">
         <label htmlFor="move-date">{t('occ.moveDate')}</label>
-        <input id="move-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <input id="move-date" className="input" type="date" value={date} min={activity.startDate} onChange={(e) => setDate(e.target.value)} />
       </div>
     </Modal>
   )
@@ -323,7 +323,7 @@ export function OccurrenceEditSheet({ activityId, originalDate, onClose }: Props
         time: time && time !== activity.time ? time : null,
         target: measurable && tgt > 0 && tgt !== occ.target ? tgt : (occ.override?.target ?? null),
       })
-      if (date && date !== occ.date) {
+      if (date && date !== occ.date && date >= activity.startDate) {
         const fresh = { ...occ }
         await moveOccurrence(fresh, date)
       }
@@ -355,7 +355,7 @@ export function OccurrenceEditSheet({ activityId, originalDate, onClose }: Props
       <div className="row">
         <div className="field">
           <label htmlFor="oe-date">{t('occ.thisDate')}</label>
-          <input id="oe-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input id="oe-date" className="input" type="date" value={date} min={activity.startDate} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div className="field">
           <label htmlFor="oe-time">{t('occ.thisTime')}</label>

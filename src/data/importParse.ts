@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { isDateKey } from '../domain/dates'
 import { COLOR_KEYS, SYNCED_TABLES, type SyncedTable } from '../domain/types'
+import { parseHlc } from '../sync/clock'
 import type { SyncRecord, SyncRecordData } from '../sync/types'
 import { SCHEMA_VERSION } from './db'
 
@@ -20,7 +21,7 @@ const meta = {
   id: z.string().min(1).max(200),
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
-  version: z.string().min(1).max(200),
+  version: z.string().max(200).refine((v) => parseHlc(v) !== null, 'invalid version'),
   deletedAt: z.number().finite().nullable().catch(null),
 }
 const color = z.enum(COLOR_KEYS as [string, ...string[]]).catch('slate')
@@ -47,7 +48,10 @@ const schemas: Record<SyncedTable, z.ZodType> = {
     unit: z.string().max(40).catch(''),
     startDate: dateKey,
     endDate: dateKey.nullable().catch(null),
-    schedule: z.array(z.object({ from: dateKey, rule, target: z.number().positive() })).min(1),
+    schedule: z
+      .array(z.object({ from: dateKey, anchor: dateKey.optional(), rule, target: z.number().positive() }))
+      .min(1)
+      .transform((list) => [...list].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0))),
     time,
     durationMinutes: z.number().nullable().catch(null),
     reminderTime: time,

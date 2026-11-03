@@ -1,7 +1,7 @@
 import type { SyncedTable } from '../domain/types'
 import { SYNCED_TABLES } from '../domain/types'
 import type { LocalRepository } from '../data/repository'
-import { compareVersions } from './clock'
+import { compareVersions, parseHlc } from './clock'
 import type { SyncRecord, SyncRecordData } from './types'
 
 /**
@@ -44,6 +44,10 @@ export async function applyRemoteRecords(
   await db.transaction('rw', [...tables, db.changes, db.meta], async () => {
     for (const { table, record } of records) {
       if (!(SYNCED_TABLES as readonly string[]).includes(table)) {
+        skipped++
+        continue
+      }
+      if (!parseHlc(record.version)) {
         skipped++
         continue
       }

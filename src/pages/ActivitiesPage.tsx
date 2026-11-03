@@ -63,7 +63,7 @@ export function ActivitiesPage() {
       }
       return true
     })
-  }, [index, search, status, category, rec, state, onDate, today, todayOccs, game, recentMissed, categoryName])
+  }, [index, search, status, category, rec, state, onDate, todayOccs, game, recentMissed, categoryName])
 
   const filtersActive = !!(search || status !== 'active' || category || rec || state || onDate)
   const clear = () => {
