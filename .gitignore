@@ -1,0 +1,10 @@
+node_modules
+dist
+dev-dist
+coverage
+e2e/output
+*.log
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
