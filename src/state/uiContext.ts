@@ -12,6 +12,8 @@ export type OverlaySpec =
   | { type: 'templates' }
   | { type: 'categories' }
   | { type: 'shortcuts' }
+  | { type: 'syncChoice' }
+  | { type: 'conflicts' }
   | { type: 'import'; parsed: ParsedImport }
   | { type: 'confirm'; title: string; message: string; confirmLabel: string; danger?: boolean; resolve: (ok: boolean) => void }
 

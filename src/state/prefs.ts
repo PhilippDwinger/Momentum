@@ -16,6 +16,10 @@ export interface Prefs {
   /** occurrence keys for which a reminder was already shown */
   remindersShown: string[]
   showHints: boolean
+  pushEnabled: boolean
+  pushGroup: string | null
+  pushPlanned: number | null
+  pushPlannedAt: number | null
 }
 
 const KEY = 'momentum.prefs.v1'
@@ -29,6 +33,10 @@ const defaults = (): Prefs => ({
   lastLevel: null,
   remindersShown: [],
   showHints: true,
+  pushEnabled: false,
+  pushGroup: null,
+  pushPlanned: null,
+  pushPlannedAt: null,
 })
 
 function load(): Prefs {

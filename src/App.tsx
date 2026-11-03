@@ -6,6 +6,9 @@ import { levelTitleKey } from './domain/gamification'
 import { useHotkeys, useOnline } from './hooks/hooks'
 import { usePwa } from './hooks/usePwa'
 import { useReminders } from './hooks/useReminders'
+import { usePushPlanner } from './hooks/usePush'
+import { SyncWatcher } from './components/SyncPanels'
+import { usePrefs } from './state/prefs'
 import { useI18n } from './i18n'
 import { AchievementsPage } from './pages/AchievementsPage'
 import { ActivitiesPage } from './pages/ActivitiesPage'
@@ -39,7 +42,9 @@ export default function App() {
   const toast = useToast()
   const pwa = usePwa()
   const online = useOnline()
-  useReminders(data)
+  const prefs = usePrefs()
+  useReminders(data, !prefs.pushEnabled)
+  usePushPlanner(data)
 
   const section = `/${route.segments[0] ?? 'today'}`
   const activeNav = section === '/activity' ? '/activities' : section
@@ -99,6 +104,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <SyncWatcher />
       <aside className="sidebar" aria-label="Navigation">
         <a className="brand" href={href('/today')}>
           <BrandMark />

@@ -3,6 +3,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const BRIDGE_URL = process.env.BRIDGE_URL || 'https://muttchen.tail91b057.ts.net:8443'
+const HOST_URL = process.env.MOMENTUM_HOST_URL || 'http://127.0.0.1:5180'
+function devProxy() {
+  return {
+    '/bridge': { target: BRIDGE_URL, changeOrigin: true, secure: false, rewrite: (p: string) => p.replace(/^\/bridge/, '') },
+    '/momentum-host': { target: HOST_URL, changeOrigin: true },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // Relative base so the build works from any sub-path (e.g. static hosting, Bridge later).
@@ -46,10 +55,15 @@ export default defineConfig({
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [],
+        // push + notification click handling (public/push-sw.js)
+        importScripts: ['push-sw.js'],
       },
       devOptions: { enabled: false },
     }),
   ],
+  // Dev/preview: forward the Bridge + host APIs like the Momentum-Host does (Bridge sends no CORS headers)
+  server: { proxy: devProxy() },
+  preview: { proxy: devProxy() },
   build: {
     // single app chunk (~170 kB gzip) is precached by the service worker anyway
     chunkSizeWarningLimit: 800,

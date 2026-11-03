@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { BellRing, CloudOff, Download, HardDrive, Keyboard, MonitorSmartphone, Trash2, Upload } from 'lucide-react'
-import { deleteAllData, getRepository, updateSettings } from '../data/actions'
+import { Download, HardDrive, Keyboard, MonitorSmartphone, Trash2, Upload } from 'lucide-react'
+import { PushSettings, SyncSettings } from '../components/SyncPanels'
+import { deviceTimeZone } from '../domain/dates'
+import { deleteAllData, updateSettings } from '../data/actions'
 import { buildExport, downloadFile, occurrencesCsv } from '../data/exportImport'
 import type { UserSettings } from '../domain/types'
 import { isStandalone, usePwa, useStoragePersisted } from '../hooks/usePwa'
@@ -10,7 +12,15 @@ import { applyTheme, setPrefs, usePrefs, type Prefs } from '../state/prefs'
 import { useToast } from '../state/toast'
 import { useUI } from '../state/uiContext'
 
-const APP_VERSION = '1.0.0'
+const APP_VERSION = '1.1.0'
+
+const timeZones: string[] = (() => {
+  try {
+    return (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.('timeZone') ?? []
+  } catch {
+    return []
+  }
+})()
 
 export function SettingsPage() {
   const { index, today } = useAppData()
@@ -23,14 +33,8 @@ export function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const s = index.settings
   const [name, setName] = useState(s.name)
-  const [pending, setPending] = useState<number | null>(null)
-  const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(() => ('Notification' in window ? Notification.permission : 'unsupported'))
-  const repo = getRepository()
 
   useEffect(() => setName(s.name), [s.name])
-  useEffect(() => {
-    void repo.pendingChangeCount().then(setPending)
-  }, [repo, index])
 
   const save = (patch: Partial<UserSettings>) => void updateSettings(s, patch)
   const setTheme = (theme: Prefs['theme']) => {
@@ -111,6 +115,20 @@ export function SettingsPage() {
           </select>
         </div>
         <div className="setting-row">
+          <label htmlFor="set-tz">
+            {t('tz.label')}
+            <small className="field-hint">{t('tz.hint')}</small>
+          </label>
+          <select id="set-tz" className="select select-sm tz-select" value={s.timeZone} onChange={(e) => save({ timeZone: e.target.value })}>
+            <option value="">{t('tz.auto', { zone: deviceTimeZone() })}</option>
+            {timeZones.map((z) => (
+              <option key={z} value={z}>
+                {z.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="setting-row">
           <span>{t('settings.weekStart')}</span>
           <div className="seg" role="group" aria-label={t('settings.weekStart')}>
             {([1, 0] as const).map((w) => (
@@ -141,34 +159,9 @@ export function SettingsPage() {
         </label>
       </section>
 
-      <section className="settings-group surface">
-        <h2><BellRing size={17} aria-hidden /> {t('settings.reminders')}</h2>
-        <p className="field-hint">{t('settings.remindersHint')}</p>
-        {perm === 'unsupported' ? (
-          <p className="small muted">{t('settings.remindersUnsupported')}</p>
-        ) : perm === 'granted' ? (
-          <div className="setting-row">
-            <span className="small">{t('settings.remindersOn')}</span>
-            <button
-              className="btn btn-sm"
-              onClick={async () => {
-                const reg = await navigator.serviceWorker?.getRegistration?.()
-                const title = t('toast.reminder', { name: 'Momentum' })
-                if (reg) await reg.showNotification(title, { body: t('app.tagline'), icon: 'icons/icon-192.png' })
-                else new Notification(title, { body: t('app.tagline') })
-              }}
-            >
-              {t('settings.remindersTest')}
-            </button>
-          </div>
-        ) : perm === 'denied' ? (
-          <p className="small muted">{t('settings.remindersDenied')}</p>
-        ) : (
-          <button className="btn btn-sm" onClick={async () => setPerm(await Notification.requestPermission())}>
-            {t('settings.remindersEnable')}
-          </button>
-        )}
-      </section>
+      <PushSettings />
+
+      <SyncSettings />
 
       <section className="settings-group surface">
         <h2><HardDrive size={17} aria-hidden /> {t('settings.data')}</h2>
@@ -215,19 +208,6 @@ export function SettingsPage() {
         >
           <Trash2 size={16} /> {t('settings.deleteAll')}
         </button>
-      </section>
-
-      <section className="settings-group surface">
-        <h2><CloudOff size={17} aria-hidden /> {t('settings.sync')}</h2>
-        <div className="setting-row">
-          <span>Bridge</span>
-          <span className="badge">{t('settings.syncStatus')}</span>
-        </div>
-        <p className="field-hint">{t('settings.syncText')}</p>
-        {pending !== null && pending > 0 && <p className="field-hint">{t('settings.syncPending', { count: pending })}</p>}
-        <p className="field-hint">
-          {t('settings.deviceId')}: <code>{repo.deviceId}</code>
-        </p>
       </section>
 
       <section className="settings-group surface">

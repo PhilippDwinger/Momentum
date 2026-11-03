@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Lightbulb, Plus, Sparkles, Sprout, Wand2 } from 'lucide-react'
 import { OccurrenceList } from '../components/Checklist'
 import { ProgressRing } from '../components/Progress'
@@ -6,7 +6,7 @@ import { useOccurrenceActions } from '../components/useOccurrenceActions'
 import { ChallengeList, StreakList, WeekStrip } from '../components/Widgets'
 import { addDays, isDateKey, startOfWeek, zonedParts } from '../domain/dates'
 import { motivationFor } from '../domain/motivation'
-import { isPlanned, occurrencesOn } from '../domain/occurrences'
+import { getOccurrence, isDone, isPlanned, occurrencesOn } from '../domain/occurrences'
 import { dayLoad, suggestRelief } from '../domain/scheduling'
 import { summarizeDay } from '../domain/stats'
 import { useHotkeys, useSwipe } from '../hooks/hooks'
@@ -29,6 +29,15 @@ export function TodayPage() {
   const ui = useUI()
   const route = useRoute()
   const actions = useOccurrenceActions()
+  const doneKey = route.query.get('done')
+  useEffect(() => {
+    if (!doneKey) return
+    setQuery({ done: null })
+    const i = doneKey.lastIndexOf('_')
+    const occ = i > 0 ? getOccurrence(index, doneKey.slice(0, i), doneKey.slice(i + 1)) : null
+    if (occ && !isDone(occ) && occ.date <= today) void actions.toggle(occ)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doneKey])
   const qd = route.query.get('d')
   const date = qd && isDateKey(qd) ? qd : today
   const go = (d: string) => setQuery({ d: d === today ? null : d })

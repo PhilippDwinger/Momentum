@@ -1,7 +1,11 @@
 import type { PullResult, SyncContext, SyncRecord, SyncTransport } from './types'
 
 /**
- * BridgeSyncAdapter – placeholder for the future Bridge transport.
+ * NOTE: Momentum's Bridge integration is implemented device-to-device in `src/sync/bridge/`
+ * (engine.ts) – devices talk to each other through Bridge, Bridge stores nothing. This adapter
+ * belongs to the alternative *central store* model of `SyncService` and is not used by the app.
+ *
+ * BridgeSyncAdapter – placeholder transport for a central store.
  *
  * Status: NOT CONNECTED. Bridge is a separate project; its API is not known to this
  * codebase yet, so no endpoints are assumed here. `isAvailable()` returns false, which makes

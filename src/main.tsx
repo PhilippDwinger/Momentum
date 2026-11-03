@@ -14,6 +14,8 @@ import { I18nProvider } from './i18n'
 import { AppDataProvider } from './state/AppData'
 import { applyTheme, usePrefs } from './state/prefs'
 import { ToastProvider } from './state/toast'
+import { BridgeSync } from './sync/bridge/engine'
+import { setBridgeSync } from './sync/bridge/instance'
 
 function Root() {
   const prefs = usePrefs()
@@ -70,6 +72,14 @@ async function boot() {
     const repo = await LocalRepository.open()
     setRepository(repo)
     await ensureSeeded()
+    // device-to-device sync over Bridge (through the Momentum-Host's same-origin proxy)
+    const sync = new BridgeSync(repo, { baseUrl: new URL('bridge', document.baseURI).href })
+    await sync.load()
+    setBridgeSync(sync)
+    sync.start()
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void sync.sendPending().catch(() => {})
+    })
     if (isStandalone()) void navigator.storage?.persist?.()
     root.render(
       <StrictMode>

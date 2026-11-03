@@ -3,6 +3,7 @@ import { UIContext, type Overlay, type OverlaySpec, type UIApi } from '../state/
 import { ActivityEditor } from './ActivityEditor'
 import { ConfirmDialog } from './Modal'
 import { CategoriesSheet, ImportSheet, ShortcutsSheet, TemplatesSheet } from './MiscSheets'
+import { ConflictsDialog, SyncChoiceDialog } from './SyncPanels'
 import { LogSheet, MoveSheet, OccurrenceEditSheet, OccurrenceSheet } from './OccurrenceSheets'
 
 /** Hosts all dialogs/sheets as a stack so they can be opened from anywhere. */
@@ -47,6 +48,10 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
             return <CategoriesSheet key={o.id} onClose={onClose} />
           case 'shortcuts':
             return <ShortcutsSheet key={o.id} onClose={onClose} />
+          case 'syncChoice':
+            return <SyncChoiceDialog key={o.id} onClose={onClose} />
+          case 'conflicts':
+            return <ConflictsDialog key={o.id} onClose={onClose} />
           case 'import':
             return <ImportSheet key={o.id} parsed={o.parsed} onClose={onClose} />
           case 'confirm':

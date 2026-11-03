@@ -8,8 +8,9 @@
  * generated for the same date (see e2e/make-demo.ts).
  */
 import { chromium, devices } from 'playwright'
-import { preview } from 'vite'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -19,7 +20,14 @@ const FIXTURE = join(here, 'fixtures', 'demo-backup.json')
 const NOW = new Date('2026-11-03T08:30:00+01:00')
 mkdirSync(OUT, { recursive: true })
 
-const server = await preview({ root: join(here, '..'), preview: { port: 4199, strictPort: true, open: false }, logLevel: 'error' })
+// The app is served by the Momentum-Host (static files + /bridge proxy + push API, push in dry-run).
+// Sync tests need a Bridge server: BRIDGE_TEST_URL=http://127.0.0.1:8002 npm run test:e2e
+const BRIDGE = process.env.BRIDGE_TEST_URL
+const host = spawn(process.execPath, [join(here, '..', 'host', 'server.mjs')], {
+  env: { ...process.env, MOMENTUM_PORT: '4199', BRIDGE_URL: BRIDGE || 'http://127.0.0.1:9', MOMENTUM_DATA: mkdtempSync(join(tmpdir(), 'momentum-host-')), MOMENTUM_PUSH_DRYRUN: '1' },
+  stdio: ['ignore', 'pipe', 'inherit'],
+})
+await new Promise((resolve) => host.stdout.on('data', (d) => String(d).includes('läuft') && resolve()))
 const BASE = 'http://localhost:4199/'
 const browser = await chromium.launch()
 
@@ -75,6 +83,14 @@ async function createActivity(page, { name, kind, target, unit, preset, weekdays
     }
   }
   if (time) await dlg.getByLabel('Uhrzeit').first().fill(time)
+  await dlg.getByRole('button', { name: 'Anlegen' }).click()
+  await dlg.waitFor({ state: 'detached' })
+}
+
+async function createActivityMobile(page, name) {
+  await page.getByRole('button', { name: 'Neue Aktivität' }).first().click()
+  const dlg = page.getByRole('dialog')
+  await dlg.getByLabel('Name', { exact: true }).fill(name)
   await dlg.getByRole('button', { name: 'Anlegen' }).click()
   await dlg.waitFor({ state: 'detached' })
 }
@@ -341,8 +357,60 @@ await test('PWA: manifest, service worker and offline usage', async () => {
   await ctx.close()
 })
 
+await test('notification "done" action and time zone setting', async () => {
+  const { ctx, page } = await newPage()
+  await importDemo(page)
+  await page.goto(BASE + '#/today?done=demo-gym_2026-11-03')
+  await occRow(page, 'Training').locator('.check-box svg').waitFor()
+  expect(!(await page.url()).includes('done='), 'done param should be removed')
+  await page.goto(BASE + '#/settings')
+  await page.getByLabel(/Zeitzone/).selectOption('Asia/Tokyo')
+  await page.goto(BASE + '#/today')
+  // 08:30 Berlin = 16:30 Tokyo on the same day -> afternoon greeting
+  await page.getByRole('heading', { name: /Hallo/ }).waitFor()
+  await page.goto(BASE + '#/settings')
+  await page.getByText('Push-Benachrichtigungen').waitFor()
+  const info = await page.evaluate(async () => (await fetch('momentum-host/info')).json())
+  expect(info.app === 'momentum-host' && info.push.publicKey.length > 40, 'host info missing')
+  await ctx.close()
+})
+
+await (BRIDGE ? test : async (name) => console.log(`  - ${name} (übersprungen: BRIDGE_TEST_URL fehlt)`))('sync between two devices through the host proxy and Bridge (merge choice)', async () => {
+  const id = `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const pc = await newPage()
+  const phone = await newPage({ ...devices['Pixel 7'] })
+  // PC: demo data, phone: own activity -> both have data
+  await importDemo(pc.page)
+  await createActivityMobile(phone.page, 'Vom Handy')
+  for (const [d, name] of [[pc, 'PC'], [phone, 'Handy']]) {
+    await d.page.goto(BASE + '#/settings')
+    await d.page.locator('#sync-id').fill(id)
+    await d.page.locator('#sync-device').fill(name)
+    await d.page.getByRole('button', { name: 'Synchronisation starten' }).click()
+    await d.page.getByText('Synchronisation gestartet').waitFor()
+  }
+  // the newer device (phone) is asked how to combine the data
+  await phone.page.getByRole('dialog', { name: 'Wie sollen die Daten zusammenkommen?' }).waitFor({ timeout: 60_000 })
+  await phone.page.screenshot({ path: join(OUT, 'sync-choice.png') })
+  await phone.page.getByRole('button', { name: /Zusammenführen/ }).click()
+  await phone.page.goto(BASE + '#/activities')
+  await phone.page.getByRole('link', { name: /Japanisch/ }).waitFor({ timeout: 60_000 })
+  await pc.page.goto(BASE + '#/activities')
+  await pc.page.getByRole('link', { name: /Vom Handy/ }).waitFor({ timeout: 60_000 })
+  // live change: tick on the phone -> appears on the PC
+  await phone.page.goto(BASE + '#/today')
+  await phone.page.getByRole('button', { name: 'Vom Handy: Als erledigt markieren' }).click()
+  await pc.page.goto(BASE + '#/today')
+  await pc.page.locator('li.occ.status-done', { hasText: 'Vom Handy' }).waitFor({ timeout: 60_000 })
+  await pc.page.goto(BASE + '#/settings')
+  await pc.page.locator('.peer-list', { hasText: 'Handy' }).waitFor()
+  await pc.page.screenshot({ path: join(OUT, 'sync-settings.png'), fullPage: true })
+  await pc.ctx.close()
+  await phone.ctx.close()
+})
+
 await browser.close()
-await new Promise((r) => server.httpServer.close(r))
+host.kill()
 const failed = results.filter((r) => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} E2E tests passed`)
 process.exit(failed.length ? 1 : 0)

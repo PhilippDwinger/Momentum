@@ -13,9 +13,14 @@ npm test             # vitest (tests/*.test.ts)
 npm run typecheck && npm run lint
 npm run build && npm run test:e2e   # Playwright E2E (e2e/run-e2e.mjs), needs chromium
 npx tsx e2e/make-demo.ts 2026-11-03 # regenerate demo fixture for a given "today"
+npm start                           # build + Momentum-Host on :5180 (static + /bridge proxy + push)
+BRIDGE_TEST_URL=http://127.0.0.1:8002 npm test   # sync tests against a real Bridge
 ```
 
-All of these passed at handover (58 unit tests, 9/9 E2E, lint + typecheck clean).
+All of these passed at handover v1.1 (73 unit tests incl. 9 sync scenarios on an in-memory Bridge,
+8 of them also against a real Bridge 3 server copy; 11/11 E2E incl. two-browser sync via host +
+real Bridge; lint + typecheck clean). Note: Bridge allows 30 registrations/hour per address –
+repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bridge.
 
 ## Map
 
@@ -23,7 +28,13 @@ All of these passed at handover (58 unit tests, 9/9 E2E, lint + typecheck clean)
   review, scheduling). Keep it free of React/storage. Every rule change needs a unit test.
 - `src/data/repository.ts` is the ONLY writer: stamps HLC `version`, tombstones, outbox.
   UI calls `src/data/actions.ts`, never Dexie directly.
-- `src/sync/` sync contract, LWW merge, `SyncService`, `BridgeSyncAdapter` placeholder.
+- `src/sync/bridge/` device-to-device sync over Bridge (engine, api, crypto, instance). Bridge is
+  pull-only + RAM-only; devices find each other via a hashed topic in the public realm and
+  exchange encrypted direct messages. NEVER change Bridge (Paddy's rule) – only use its client API.
+- `host/server.mjs` Momentum-Host: serves dist, proxies `/bridge/*` (Bridge has no CORS), Web Push
+  (VAPID keys + plans in `host/data/push-state.json`, scheduler every 15 s).
+- `src/domain/notifications.ts` motivational texts (de/en × gentle/motivating/intense) + push plan.
+- `src/sync/SyncService.ts`/`BridgeSyncAdapter.ts` = unused central-store alternative.
 - `src/state/AppData.tsx` live data + derived `history`/`game`. `uiContext` + `components/Overlays.tsx`
   host all dialogs (`ui.open({type:'editor' | 'occurrence' | 'log' | 'move' | …})`).
 - `src/i18n/de.ts` is the source dictionary; `en.ts` is type-checked against it (add keys to both).
@@ -43,10 +54,16 @@ All of these passed at handover (58 unit tests, 9/9 E2E, lint + typecheck clean)
 - Seeded built-in categories use `SEED_VERSION` (lowest) and no outbox entry.
 - Future occurrences cannot be logged (`FutureLogError`).
 - Buttons inside `<form>` need `type="button"` (bug fixed once in LogSheet).
+- Sync content comparison ignores createdAt/updatedAt/version/loggedAt (otherwise identical
+  progress on two devices becomes a fake conflict).
+- Only the device that joined the group later shows the initial choice dialog (`joinedAt`).
+- Push group = sync `groupId`, or `'d'+deviceId` without sync. Plans are built on the device.
 
 ## Status / next steps
 
-- Bridge sync: implement `src/sync/BridgeSyncAdapter.ts` and wire `SyncService` in `src/main.tsx`
-  – full guide in `docs/BRIDGE_SYNC.md`.
-- Ideas not built: built-in timer for duration activities, push reminders (needs server),
-  reordering activities by drag, field-level merge for activities.
+- v1.1 (04.11.2026): timezone setting, sync over Bridge (Sync-ID groups, initial choice
+  merge/theirs/mine, conflicts), Momentum-Host, Web Push with motivational texts.
+- Phone: `tailscale serve --bg --https=10000 http://127.0.0.1:5180` → https://muttchen.tail91b057.ts.net:10000
+- Not verified on a real phone yet (headless Chromium has no push service) – first real test is Paddy's.
+- Ideas not built: built-in timer for duration activities, reordering activities by drag,
+  field-level merge for activities.

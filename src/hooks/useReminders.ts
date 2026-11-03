@@ -10,10 +10,10 @@ import { getPrefs, setPrefs } from '../state/prefs'
  * its tab) is running – this is a platform limitation and documented in the README.
  * Each occurrence is notified at most once (tracked in device-local prefs).
  */
-export function useReminders(data: AppData) {
+export function useReminders(data: AppData, active = true) {
   const { t } = useI18n()
   useEffect(() => {
-    if (!('Notification' in window)) return
+    if (!active || !('Notification' in window)) return
     const check = async () => {
       if (Notification.permission !== 'granted') return
       const p = zonedParts(new Date(), data.timeZone)
@@ -44,5 +44,5 @@ export function useReminders(data: AppData) {
     void check()
     const timer = setInterval(() => void check(), 30_000)
     return () => clearInterval(timer)
-  }, [data, t])
+  }, [data, t, active])
 }
