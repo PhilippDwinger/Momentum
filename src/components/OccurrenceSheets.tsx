@@ -69,6 +69,7 @@ function LogControl({ activity, occ, value, setValue }: { activity: Activity; oc
             value={Number.isFinite(value) ? value : 0}
             onChange={(e) => setValue(Math.max(0, Number(e.target.value)))}
             aria-label={t('occ.progress')}
+            onFocus={(e) => e.currentTarget.select()}
             data-autofocus
           />
           <span className="log-unit">

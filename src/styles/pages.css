@@ -366,8 +366,14 @@
   }
   .today-head {
     position: relative;
-    padding-right: 96px;
+    padding-right: 56px;
     margin-bottom: 14px;
+  }
+  .today-head:has(.btn:not(:disabled)) {
+    padding-right: 150px;
+  }
+  .today-head .page-title {
+    font-size: 26px;
   }
   .today-head .date-nav {
     position: absolute;
