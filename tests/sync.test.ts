@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as actions from '../src/data/actions'
-import { applyImport, buildExport, parseImport, ImportError } from '../src/data/exportImport'
+import { applyImport, buildExport } from '../src/data/exportImport'
+import { parseImport, ImportError } from '../src/data/importParse'
 import { LocalRepository } from '../src/data/repository'
 import { DEFAULT_SETTINGS } from '../src/data/defaults'
 import { buildIndex, occurrencesOn } from '../src/domain/occurrences'

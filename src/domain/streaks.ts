@@ -15,8 +15,10 @@ import type { Activity, DateKey } from './types'
 export interface StreakInfo {
   current: number
   longest: number
-  /** Dates of missed occurrences that were forgiven by streak protection. */
+  /** Dates of missed occurrences that were forgiven by streak protection (all time). */
   protectedDates: DateKey[]
+  /** Forgiven misses inside the currently running streak. */
+  currentProtected: DateKey[]
   /** Today's occurrence is still open and a streak is running. */
   atRisk: boolean
   /** Streak would also grow today (today scheduled and not yet completed). */
@@ -37,10 +39,10 @@ export function computeStreak(index: DataIndex, activity: Activity, today: DateK
   let longest = 0
   let lastProtected: DateKey | null = null
   let lastSuccess: DateKey | null = null
-  let atRisk = false
   let dueToday = false
   let totalSuccess = 0
   const protectedDates: DateKey[] = []
+  let currentProtected: DateKey[] = []
   const milestones: Record<number, DateKey> = {}
 
   for (const occ of occs) {
@@ -62,12 +64,14 @@ export function computeStreak(index: DataIndex, activity: Activity, today: DateK
     if (protection && current > 0 && (lastProtected === null || diffDays(lastProtected, occ.date) >= 7)) {
       lastProtected = occ.date
       protectedDates.push(occ.date)
+      currentProtected.push(occ.date)
       continue
     }
     current = 0
+    currentProtected = []
   }
-  atRisk = dueToday && current > 0
-  return { current, longest, protectedDates, atRisk, dueToday, lastSuccess, milestones, totalSuccess }
+  const atRisk = dueToday && current > 0
+  return { current, longest, protectedDates, currentProtected, atRisk, dueToday, lastSuccess, milestones, totalSuccess }
 }
 
 export function computeAllStreaks(index: DataIndex, today: DateKey): Map<string, StreakInfo> {

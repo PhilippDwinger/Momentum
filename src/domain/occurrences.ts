@@ -101,6 +101,16 @@ function makeOccurrence(index: DataIndex, a: Activity, originalDate: DateKey, un
   }
 }
 
+/** Resolve a single occurrence by its identity (activity + original date). */
+export function getOccurrence(index: DataIndex, activityId: ID, originalDate: DateKey): Occurrence | null {
+  const a = index.activityById.get(activityId)
+  if (!a) return null
+  const scheduled = isScheduled(a, originalDate)
+  const entry = index.entries.get(occKey(activityId, originalDate))
+  if (!scheduled && !(entry && entry.value > 0)) return null
+  return makeOccurrence(index, a, originalDate, !scheduled)
+}
+
 /**
  * All occurrences of one activity whose *effective* date lies in [from, to].
  * Includes occurrences moved into the range, excludes those moved out of it, and

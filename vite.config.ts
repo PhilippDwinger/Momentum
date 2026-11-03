@@ -42,6 +42,7 @@ export default defineConfig({
         // Only the static app shell is cached. User data lives in IndexedDB and is never
         // put into the HTTP cache.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
+        globIgnores: ['**/*-cyrillic*', '**/*-greek*', '**/*-vietnamese*'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
         runtimeCaching: [],
@@ -49,6 +50,10 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  build: {
+    // single app chunk (~170 kB gzip) is precached by the service worker anyway
+    chunkSizeWarningLimit: 800,
+  },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],

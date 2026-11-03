@@ -114,7 +114,7 @@ export async function updateActivity(activity: Activity, draft: ActivityDraft, s
   const r = getRepository()
   const c = cleanDraft(draft)
   const { target, rule, ...rest } = c
-  let schedule = activity.schedule
+  let schedule: Activity['schedule']
   let startDate = activity.startDate
   if (scope.mode === 'all' || scope.from <= activity.startDate) {
     startDate = c.startDate
@@ -195,11 +195,14 @@ export const overrideId = (activityId: ID, date: DateKey) => `o_${activityId}_${
 export async function logProgress(occ: Occurrence, value: number, today: DateKey, note?: string): Promise<void> {
   if (occ.date > today) throw new FutureLogError()
   const r = getRepository()
-  const v = Math.max(0, Math.round((Number(value) || 0) * 100) / 100)
-  const nextNote = note ?? occ.entry?.note ?? ''
   const id = entryId(occ.activityId, occ.originalDate)
+  // read the current record – `occ` may be a stale snapshot (e.g. when undoing)
+  const stored = await r.db.entries.get(id)
+  const existing = stored && !stored.deletedAt ? stored : null
+  const v = Math.max(0, Math.round((Number(value) || 0) * 100) / 100)
+  const nextNote = note ?? existing?.note ?? ''
   if (v === 0 && !nextNote.trim()) {
-    if (occ.entry) await r.remove('entries', [id])
+    if (existing) await r.remove('entries', [id])
     return
   }
   const record: NoMeta<Entry> = {
@@ -209,7 +212,7 @@ export async function logProgress(occ: Occurrence, value: number, today: DateKey
     value: v,
     target: occ.target,
     note: nextNote,
-    loggedAt: v !== (occ.entry?.value ?? 0) ? Date.now() : (occ.entry?.loggedAt ?? Date.now()),
+    loggedAt: v !== (existing?.value ?? 0) ? Date.now() : (existing?.loggedAt ?? Date.now()),
   }
   await r.put('entries', record)
 }
@@ -223,9 +226,11 @@ export async function toggleDone(occ: Occurrence, today: DateKey): Promise<boole
 export async function setNote(occ: Occurrence, note: string): Promise<void> {
   const r = getRepository()
   const id = entryId(occ.activityId, occ.originalDate)
-  const value = occ.entry?.value ?? 0
+  const stored = await r.db.entries.get(id)
+  const existing = stored && !stored.deletedAt ? stored : null
+  const value = existing?.value ?? 0
   if (value === 0 && !note.trim()) {
-    if (occ.entry) await r.remove('entries', [id])
+    if (existing) await r.remove('entries', [id])
     return
   }
   await r.put('entries', {
@@ -233,16 +238,17 @@ export async function setNote(occ: Occurrence, note: string): Promise<void> {
     activityId: occ.activityId,
     date: occ.originalDate,
     value,
-    target: occ.entry?.target ?? occ.target,
+    target: existing?.target ?? occ.target,
     note: note.slice(0, 2000),
-    loggedAt: occ.entry?.loggedAt ?? Date.now(),
+    loggedAt: existing?.loggedAt ?? Date.now(),
   } satisfies NoMeta<Entry>)
 }
 
 async function saveOverride(occ: Occurrence, patch: Partial<Pick<OccurrenceOverride, 'skipped' | 'movedTo' | 'target' | 'time'>>) {
   const r = getRepository()
   const id = overrideId(occ.activityId, occ.originalDate)
-  const base = occ.override
+  const stored = await r.db.overrides.get(id)
+  const base = stored && !stored.deletedAt ? stored : null
   const next = {
     skipped: base?.skipped ?? false,
     movedTo: base?.movedTo ?? null,
@@ -253,7 +259,7 @@ async function saveOverride(occ: Occurrence, patch: Partial<Pick<OccurrenceOverr
   if (next.movedTo === occ.originalDate) next.movedTo = null
   const empty = !next.skipped && !next.movedTo && next.target === null && next.time === null
   if (empty) {
-    if (base && !base.deletedAt) await r.remove('overrides', [id])
+    if (base) await r.remove('overrides', [id])
     return
   }
   await r.put('overrides', { id, activityId: occ.activityId, date: occ.originalDate, ...next } satisfies NoMeta<OccurrenceOverride>)
