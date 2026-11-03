@@ -4,7 +4,7 @@ import { OccurrenceList } from '../components/Checklist'
 import { ProgressRing } from '../components/Progress'
 import { useOccurrenceActions } from '../components/useOccurrenceActions'
 import { ChallengeList, StreakList, WeekStrip } from '../components/Widgets'
-import { addDays, isDateKey, startOfWeek } from '../domain/dates'
+import { addDays, isDateKey, startOfWeek, zonedParts } from '../domain/dates'
 import { motivationFor } from '../domain/motivation'
 import { isPlanned, occurrencesOn } from '../domain/occurrences'
 import { dayLoad, suggestRelief } from '../domain/scheduling'
@@ -24,7 +24,7 @@ function greetingKey(hour: number) {
 }
 
 export function TodayPage() {
-  const { index, today, game } = useAppData()
+  const { index, today, game, timeZone } = useAppData()
   const { t, fmt, relative } = useI18n()
   const ui = useUI()
   const route = useRoute()
@@ -54,7 +54,7 @@ export function TodayPage() {
   })
 
   const name = index.settings.name.trim()
-  const heading = isToday ? `${t(greetingKey(new Date().getHours()))}${name ? `, ${name}` : ''}` : relative(date, today)
+  const heading = isToday ? `${t(greetingKey(zonedParts(new Date(), timeZone).hour))}${name ? `, ${name}` : ''}` : relative(date, today)
   const noActivities = index.activities.length === 0
 
   return (

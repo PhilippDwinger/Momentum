@@ -14,6 +14,10 @@ export const DEFAULT_SETTINGS: UserSettings = {
   streakProtection: true,
   overloadThreshold: 5,
   showMotivation: true,
+  timeZone: '',
+  notifyMorning: '07:30',
+  notifyEvening: '20:30',
+  notifyTone: 'intense',
 }
 
 /** Built-in categories use deterministic ids so that seeding on two devices converges. */

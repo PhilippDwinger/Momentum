@@ -194,7 +194,17 @@ export interface UserSettings extends SyncMeta {
   /** Smart scheduling: hint when a day has more than this many activities. */
   overloadThreshold: number
   showMotivation: boolean
+  /** IANA time zone, '' = use each device's zone. */
+  timeZone: string
+  /** Push: daily kick-off time 'HH:MM' or '' (off). */
+  notifyMorning: string
+  /** Push: evening rescue time 'HH:MM' or '' (off). */
+  notifyEvening: string
+  /** Tone of motivational texts. */
+  notifyTone: NotifyTone
 }
+
+export type NotifyTone = 'gentle' | 'motivating' | 'intense'
 
 /** Derived (never stored) – one concrete occurrence of an activity. */
 export interface Occurrence {

@@ -103,6 +103,10 @@ const schemas: Record<SyncedTable, z.ZodType> = {
     streakProtection: z.boolean().catch(true),
     overloadThreshold: z.number().int().min(2).max(20).catch(5),
     showMotivation: z.boolean().catch(true),
+    timeZone: z.string().max(64).catch(''),
+    notifyMorning: z.string().regex(/^(\d{1,2}:\d{2})?$/).catch('07:30'),
+    notifyEvening: z.string().regex(/^(\d{1,2}:\d{2})?$/).catch('20:30'),
+    notifyTone: z.enum(['gentle', 'motivating', 'intense']).catch('intense'),
   }),
 }
 

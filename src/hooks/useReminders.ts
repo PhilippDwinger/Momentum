@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { parseTime } from '../domain/dates'
+import { parseTime, zonedParts } from '../domain/dates'
 import { isDone, isPlanned, occurrencesOn } from '../domain/occurrences'
 import { useI18n } from '../i18n'
 import type { AppData } from '../state/AppData'
@@ -16,8 +16,8 @@ export function useReminders(data: AppData) {
     if (!('Notification' in window)) return
     const check = async () => {
       if (Notification.permission !== 'granted') return
-      const now = new Date()
-      const minutes = now.getHours() * 60 + now.getMinutes()
+      const p = zonedParts(new Date(), data.timeZone)
+      const minutes = p.hour * 60 + p.minute
       const shown = new Set(getPrefs().remindersShown)
       const due = occurrencesOn(data.index, data.today).filter((o) => {
         const a = data.index.activityById.get(o.activityId)

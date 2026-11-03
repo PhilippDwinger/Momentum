@@ -21,6 +21,8 @@ export interface ChangeLogEntry {
   id: ID
   version: string
   at: number
+  /** 'local' = written on this device, 'remote' = applied from another device/import. */
+  origin?: 'local' | 'remote'
 }
 
 export type SyncStatus = 'disabled' | 'idle' | 'syncing' | 'error'

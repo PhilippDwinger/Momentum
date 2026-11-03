@@ -49,10 +49,22 @@ export class LocalRepository {
     } as T & SyncMeta
   }
 
+  private listeners = new Set<() => void>()
+
+  /** Called (after the transaction) whenever this device changed synchronised data. */
+  onLocalChange(fn: () => void): () => void {
+    this.listeners.add(fn)
+    return () => this.listeners.delete(fn)
+  }
+
+  private notify() {
+    for (const fn of this.listeners) queueMicrotask(fn)
+  }
+
   private async logChange(table: SyncedTable, id: string, version: string, at: number) {
     const prev = await this.db.changes.where('[table+id]').equals([table, id]).first()
     if (prev?.seq !== undefined) await this.db.changes.delete(prev.seq)
-    const entry: ChangeLogEntry = { table, id, version, at }
+    const entry: ChangeLogEntry = { table, id, version, at, origin: 'local' }
     await this.db.changes.add(entry)
   }
 
@@ -64,7 +76,7 @@ export class LocalRepository {
   async putMany<T extends Stampable>(table: SyncedTable, records: T[]): Promise<(T & SyncMeta)[]> {
     if (records.length === 0) return []
     const tbl = this.db.table(table)
-    return this.db.transaction('rw', [tbl, this.db.changes, this.db.meta], async () => {
+    const result = await this.db.transaction('rw', [tbl, this.db.changes, this.db.meta], async () => {
       const now = Date.now()
       const out: (T & SyncMeta)[] = []
       for (const r of records) {
@@ -77,6 +89,8 @@ export class LocalRepository {
       await this.persistClock()
       return out
     })
+    this.notify()
+    return result
   }
 
   async put<T extends Stampable>(table: SyncedTable, record: T): Promise<T & SyncMeta> {
@@ -86,7 +100,7 @@ export class LocalRepository {
   /** Partial update of an existing record. */
   async patch<T extends SyncMeta>(table: SyncedTable, id: string, patch: Partial<T>): Promise<T | undefined> {
     const tbl = this.db.table(table)
-    return this.db.transaction('rw', [tbl, this.db.changes, this.db.meta], async () => {
+    const result = await this.db.transaction('rw', [tbl, this.db.changes, this.db.meta], async () => {
       const existing = (await tbl.get(id)) as T | undefined
       if (!existing) return undefined
       const now = Date.now()
@@ -96,6 +110,8 @@ export class LocalRepository {
       await this.persistClock()
       return stamped
     })
+    this.notify()
+    return result
   }
 
   /** Soft delete (tombstone) – required so deletions can be synchronised later. */
@@ -113,6 +129,7 @@ export class LocalRepository {
       }
       await this.persistClock()
     })
+    this.notify()
   }
 
   /** Run several repository calls atomically. */

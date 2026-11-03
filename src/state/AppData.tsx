@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ensureWeeklyChallenges, getRepository } from '../data/actions'
 import { DEFAULT_SETTINGS, SETTINGS_ID } from '../data/defaults'
-import { logicalToday, startOfWeek } from '../domain/dates'
+import { logicalToday, resolveTimeZone, startOfWeek } from '../domain/dates'
 import { buildHistory, computeGame, type GameState, type History } from '../domain/gamification'
 import { buildIndex, type DataIndex, type DataSnapshot } from '../domain/occurrences'
 import { earliestStart } from '../domain/stats'
@@ -14,6 +14,8 @@ import { useToast } from './toast'
 export interface AppData {
   index: DataIndex
   today: DateKey
+  /** Effective IANA time zone (setting or device). */
+  timeZone: string
   history: History
   game: GameState
 }
@@ -35,10 +37,10 @@ async function loadSnapshot(): Promise<DataSnapshot> {
 }
 
 /** The logical "today", re-evaluated every 30 s and when the app becomes visible again. */
-function useToday(dayStartHour: number): DateKey {
-  const [today, setToday] = useState(() => logicalToday(new Date(), dayStartHour))
+function useToday(dayStartHour: number, timeZone: string): DateKey {
+  const [today, setToday] = useState(() => logicalToday(new Date(), dayStartHour, timeZone))
   useEffect(() => {
-    const update = () => setToday(logicalToday(new Date(), dayStartHour))
+    const update = () => setToday(logicalToday(new Date(), dayStartHour, timeZone))
     update()
     const timer = setInterval(update, 30_000)
     document.addEventListener('visibilitychange', update)
@@ -48,19 +50,20 @@ function useToday(dayStartHour: number): DateKey {
       document.removeEventListener('visibilitychange', update)
       window.removeEventListener('focus', update)
     }
-  }, [dayStartHour])
+  }, [dayStartHour, timeZone])
   return today
 }
 
 export function AppDataProvider({ children, fallback }: { children: ReactNode; fallback: ReactNode }) {
   const snapshot = useLiveQuery(loadSnapshot, [])
   const index = useMemo(() => (snapshot ? buildIndex(snapshot) : null), [snapshot])
-  const today = useToday(index?.settings.dayStartHour ?? 0)
+  const timeZone = resolveTimeZone(index?.settings.timeZone)
+  const today = useToday(index?.settings.dayStartHour ?? 0, timeZone)
   const value = useMemo<AppData | null>(() => {
     if (!index) return null
     const history = buildHistory(index, earliestStart(index, today), today)
-    return { index, today, history, game: computeGame(index, history, today) }
-  }, [index, today])
+    return { index, today, timeZone, history, game: computeGame(index, history, today) }
+  }, [index, today, timeZone])
 
   if (!value) return <>{fallback}</>
   return (

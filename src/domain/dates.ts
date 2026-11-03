@@ -113,13 +113,84 @@ export function localKey(date: Date): DateKey {
   return makeKey(date.getFullYear(), date.getMonth() + 1, date.getDate())
 }
 
+// ---------------------------------------------------------------------------
+// Time zones. An empty/undefined zone means "the device's zone".
+// ---------------------------------------------------------------------------
+
+export function deviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+export function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** The configured zone if valid, otherwise the device zone. */
+export function resolveTimeZone(tz?: string | null): string {
+  return tz && isValidTimeZone(tz) ? tz : deviceTimeZone()
+}
+
+const partsFormatters = new Map<string, Intl.DateTimeFormat>()
+
+/** Wall-clock date and time of an instant in a time zone. */
+export function zonedParts(date: Date, timeZone?: string | null): { key: DateKey; hour: number; minute: number } {
+  if (!timeZone) return { key: localKey(date), hour: date.getHours(), minute: date.getMinutes() }
+  let f = partsFormatters.get(timeZone)
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+    partsFormatters.set(timeZone, f)
+  }
+  const p: Record<string, string> = {}
+  for (const part of f.formatToParts(date)) p[part.type] = part.value
+  return { key: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) % 24, minute: Number(p.minute) }
+}
+
+/** Offset (ms) of a time zone at an instant: wall clock minus UTC. */
+function zoneOffset(ms: number, timeZone: string): number {
+  const p = zonedParts(new Date(ms), timeZone)
+  const { y, m, d } = parseKey(p.key)
+  const wall = Date.UTC(y, m - 1, d, p.hour, p.minute)
+  return wall - Math.floor(ms / 60000) * 60000
+}
+
 /**
- * The "logical" today. With dayStartHour = 4, 02:30 local time still belongs to yesterday.
- * Uses local wall-clock hours, so DST shifts cannot move the boundary.
+ * UTC instant (epoch ms) of a wall-clock time on a calendar day in a zone. Handles DST: a time
+ * inside the spring gap resolves to the moment after the jump, an ambiguous autumn time to the
+ * first occurrence.
  */
-export function logicalToday(now: Date = new Date(), dayStartHour = 0): DateKey {
-  const key = localKey(now)
-  return now.getHours() < dayStartHour ? addDays(key, -1) : key
+export function zonedTimeToUtc(key: DateKey, minutesOfDay: number, timeZone?: string | null): number {
+  const { y, m, d } = parseKey(key)
+  const wall = Date.UTC(y, m - 1, d, Math.floor(minutesOfDay / 60), minutesOfDay % 60)
+  if (!timeZone) return new Date(y, m - 1, d, Math.floor(minutesOfDay / 60), minutesOfDay % 60).getTime()
+  const first = wall - zoneOffset(wall, timeZone)
+  const second = wall - zoneOffset(first, timeZone)
+  return Math.min(first, second)
+}
+
+/**
+ * The "logical" today. With dayStartHour = 4, 02:30 still belongs to yesterday. Evaluated on the
+ * wall clock of the given time zone (default: device), so DST shifts cannot move the boundary.
+ */
+export function logicalToday(now: Date = new Date(), dayStartHour = 0, timeZone?: string | null): DateKey {
+  const { key, hour } = zonedParts(now, timeZone)
+  return hour < dayStartHour ? addDays(key, -1) : key
 }
 
 /** A local Date at noon of the given key – safe for Intl formatting. */

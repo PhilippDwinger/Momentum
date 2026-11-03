@@ -63,7 +63,7 @@ export async function applyRemoteRecords(
       if (opts.logChanges) {
         const prev = await db.changes.where('[table+id]').equals([table, record.id]).first()
         if (prev?.seq !== undefined) await db.changes.delete(prev.seq)
-        await db.changes.add({ table, id: record.id, version: record.version, at: Date.now() })
+        await db.changes.add({ table, id: record.id, version: record.version, at: Date.now(), origin: 'remote' })
       }
     }
     await db.meta.put({ key: 'clock', value: repo.clock.current })

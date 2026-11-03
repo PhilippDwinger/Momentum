@@ -5,6 +5,16 @@ import type { ChangeLogEntry, SyncState } from '../sync/types'
 /** Bump when the stored data shape changes; also written into exports. */
 export const SCHEMA_VERSION = 1
 
+export interface SyncConflict {
+  /** `<table>:<record id>` */
+  id: string
+  table: SyncedTable
+  local: Record<string, unknown>
+  remote: Record<string, unknown>
+  peerName: string
+  at: number
+}
+
 export interface MetaRow {
   key: string
   value: unknown
@@ -27,6 +37,8 @@ export class MomentumDB extends Dexie {
   syncState!: Table<SyncState, string>
   /** Device-local values (deviceId, last clock value …). Never synchronised. */
   meta!: Table<MetaRow, string>
+  /** Sync conflicts waiting for a decision (device-local). */
+  conflicts!: Table<SyncConflict, string>
 
   constructor(name = 'momentum') {
     super(name)
@@ -41,6 +53,7 @@ export class MomentumDB extends Dexie {
       syncState: 'id',
       meta: 'key',
     })
+    this.version(2).stores({ conflicts: 'id, at' })
   }
 
   syncedTable(name: SyncedTable): Table<{ id: string; version: string; deletedAt: number | null }, string> {
