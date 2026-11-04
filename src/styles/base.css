@@ -229,6 +229,8 @@ svg {
   min-height: 100dvh;
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  /* Android app draws edge-to-edge: keep content below the status bar */
+  padding-top: env(safe-area-inset-top, 0px);
 }
 .sidebar {
   position: sticky;

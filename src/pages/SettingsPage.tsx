@@ -6,13 +6,15 @@ import { deleteAllData, updateSettings } from '../data/actions'
 import { buildExport, downloadFile, occurrencesCsv } from '../data/exportImport'
 import type { UserSettings } from '../domain/types'
 import { isStandalone, usePwa, useStoragePersisted } from '../hooks/usePwa'
+import { AppUpdatePanel } from '../components/AppUpdatePanel'
+import { IS_NATIVE } from '../platform/native'
 import { useI18n, type Lang } from '../i18n'
 import { useAppData } from '../state/AppData'
 import { applyTheme, setPrefs, usePrefs, type Prefs } from '../state/prefs'
 import { useToast } from '../state/toast'
 import { useUI } from '../state/uiContext'
 
-const APP_VERSION = '1.1.0'
+const APP_VERSION = '1.2.0'
 
 const timeZones: string[] = (() => {
   try {
@@ -187,10 +189,12 @@ export function SettingsPage() {
             }}
           />
         </div>
-        <p className="field-hint" style={{ marginTop: 12 }}>
-          {storage.persisted ? t('settings.storagePersisted') : t('settings.storageBestEffort')}
-        </p>
-        {storage.persisted === false && (
+        {!IS_NATIVE && (
+          <p className="field-hint" style={{ marginTop: 12 }}>
+            {storage.persisted ? t('settings.storagePersisted') : t('settings.storageBestEffort')}
+          </p>
+        )}
+        {!IS_NATIVE && storage.persisted === false && (
           <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => void storage.request()}>
             {t('settings.storageRequest')}
           </button>
@@ -210,6 +214,9 @@ export function SettingsPage() {
         </button>
       </section>
 
+      {IS_NATIVE ? (
+        <AppUpdatePanel />
+      ) : (
       <section className="settings-group surface">
         <h2><MonitorSmartphone size={17} aria-hidden /> {t('settings.app')}</h2>
         {isStandalone() ? (
@@ -234,6 +241,7 @@ export function SettingsPage() {
           </button>
         </div>
       </section>
+      )}
     </div>
   )
 }

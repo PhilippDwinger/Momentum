@@ -13,12 +13,14 @@ function devProxy() {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+// `vite build --mode app` = web bundle for the Android app (no service worker; see capacitor.config.ts)
+export default defineConfig(({ mode }) => ({
   // Relative base so the build works from any sub-path (e.g. static hosting, Bridge later).
   base: './',
   plugins: [
     react(),
     VitePWA({
+      disable: mode === 'app',
       registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/favicon.svg', 'icons/apple-touch-icon.png'],
@@ -73,4 +75,4 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     setupFiles: ['tests/setup.ts'],
   },
-})
+}))

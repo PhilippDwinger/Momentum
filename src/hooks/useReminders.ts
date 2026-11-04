@@ -4,6 +4,7 @@ import { isDone, isPlanned, occurrencesOn } from '../domain/occurrences'
 import { useI18n } from '../i18n'
 import type { AppData } from '../state/AppData'
 import { getPrefs, setPrefs } from '../state/prefs'
+import { IS_NATIVE } from '../platform/native'
 
 /**
  * Local reminders. Without a push server, notifications can only be shown while the app (or
@@ -13,7 +14,8 @@ import { getPrefs, setPrefs } from '../state/prefs'
 export function useReminders(data: AppData, active = true) {
   const { t } = useI18n()
   useEffect(() => {
-    if (!active || !('Notification' in window)) return
+    // the Android app schedules real notifications instead (platform/localNotify.ts)
+    if (!active || IS_NATIVE || !('Notification' in window)) return
     const check = async () => {
       if (Notification.permission !== 'granted') return
       const p = zonedParts(new Date(), data.timeZone)

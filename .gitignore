@@ -12,3 +12,6 @@ Thumbs.db
 # delivery archive
 /Momentum.zip
 host/data
+
+# Android release key (only on Paddy's PC + GitHub secrets)
+signing/

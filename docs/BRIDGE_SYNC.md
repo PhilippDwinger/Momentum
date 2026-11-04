@@ -6,13 +6,16 @@ Client-API. Bridge übernimmt keine Sync-Logik: es leitet Nachrichten weiter, di
 miteinander.
 
 ```
- Handy (PWA) ─┐                                  ┌─ PC (PWA)
-              │ https://…:10000/bridge/*          │ http://localhost:5180/bridge/*
-              ▼                                   ▼
-        Momentum-Host (PC) ── 1:1 weiter ──►  Bridge (https://muttchen.tail91b057.ts.net:8443)
+ Handy (Android-App) ── direkt (native HTTP) ───────────────►  Bridge
+                                                                (https://muttchen.tail91b057.ts.net:8443)
+ PC (Browser) ── http://localhost:5180/bridge/* ── Momentum-Host ── 1:1 weiter ──►  Bridge
 ```
 
-## Warum der Momentum-Host dazwischen sitzt
+## Warum der Momentum-Host (nur im Browser) dazwischen sitzt
+
+Die Android-App braucht ihn nicht: Sie ruft Bridge über Androids eigenen HTTP-Stack auf
+(`CapacitorHttp`, `src/platform/native.ts`), dort gibt es kein CORS. Ändert man in der App den
+Bridge-Server, registriert sich das Gerät dort neu (`load()` verwirft das alte Konto).
 
 Bridge schickt keine CORS-Header. Ein Browser darf deshalb Antworten von Bridge nur lesen,
 wenn die App vom **gleichen Ursprung** kommt. Der Host (`host/server.mjs`) liefert die App aus

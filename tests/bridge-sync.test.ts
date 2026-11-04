@@ -191,4 +191,30 @@ describe(`Bridge sync (${label})`, () => {
     expect(b.sync.getSnapshot().state.account!.clientIp).toBe(ipBefore)
     expect(await names(b.repo)).toEqual(['Nachher', 'Vorher'])
   })
+
+  it.skipIf(!!REAL)('switching the Bridge server (app setting) registers a new account there and keeps syncing', async () => {
+    const one = new FakeBridge()
+    const two = new FakeBridge()
+    two.url = 'http://other-bridge.test'
+    const id = generateSyncId()
+    const a = await device(one, 'PC')
+    const b = await device(one, 'Handy')
+    await add(a, 'Alt')
+    await a.sync.configure(id, 'PC')
+    await b.sync.configure(id, 'Handy')
+    await rounds([a, b])
+    const oldIp = b.sync.getSnapshot().state.account!.clientIp
+    // the app restarts with the new server address
+    const a2 = { ...a, sync: new BridgeSync(a.repo, { baseUrl: two.url, fetch: two.fetch, autoStart: false }) }
+    const b2 = { ...b, sync: new BridgeSync(b.repo, { baseUrl: two.url, fetch: two.fetch, autoStart: false }) }
+    await a2.sync.load()
+    await b2.sync.load()
+    expect(b2.sync.getSnapshot().state.account).toBeNull()
+    expect(b2.sync.getSnapshot().state.enabled).toBe(true)
+    await add(a2, 'Neu')
+    await rounds([a2, b2], 6)
+    expect(b2.sync.getSnapshot().state.account!.clientIp.startsWith(two.url)).toBe(true)
+    expect(b2.sync.getSnapshot().state.account!.clientIp).not.toBe(oldIp)
+    expect(await names(b.repo)).toEqual(['Alt', 'Neu'])
+  })
 })

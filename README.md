@@ -2,7 +2,8 @@
 
 Persönlicher Planer für Gewohnheiten, Routinen und Ziele – Kalender, Tages-Checkliste, Serien,
 Statistiken und ein dezentes Belohnungssystem. Local-first: alle Daten bleiben auf dem Gerät,
-die App funktioniert offline und lässt sich als PWA auf Handy und Desktop installieren.
+die App funktioniert offline. Auf dem Handy als **Android-App (APK) mit Auto-Update**, am PC im
+Browser.
 Geräte mit derselben **Sync-ID** synchronisieren sich über deinen **Bridge**-Server
 (Ende-zu-Ende verschlüsselt, Bridge wird nicht verändert), und Push-Benachrichtigungen mit
 richtig motivierenden Texten kommen auch bei geschlossener App aufs Handy.
@@ -68,35 +69,56 @@ Das Fenster muss offen bleiben, solange Sync und Push laufen sollen (Autostart: 
 
 Nur entwickeln ohne Host: `npm run dev` (Vite leitet `/bridge` ebenfalls an Bridge weiter).
 
-## Momentum aufs Handy (App + Benachrichtigungen)
+## Momentum aufs Handy (Android-App)
 
-Push und Installation brauchen **HTTPS**. Am einfachsten über Tailscale, das du für Bridge schon
-nutzt. Einmalig in CMD auf dem PC (Host läuft):
+Auf dem Handy ist Momentum eine **echte Android-App (APK)**. Sie läuft ohne PC und ohne Tailscale:
 
-```bat
-tailscale serve --bg --https=10000 http://127.0.0.1:5180
-```
+- Sync: Die App redet **direkt mit deinem Bridge-Server** `https://muttchen.tail91b057.ts.net:8443`
+  (über Androids eigenen HTTP-Stack, deshalb stört das fehlende CORS von Bridge nicht).
+- Benachrichtigungen: Die App plant Erinnerungen, Morgen-Kick und Abend-Rettung **auf dem Handy
+  selbst** (7 Tage im Voraus, mit „Erledigt ✓“-Knopf). Sie kommen auch bei geschlossener App.
+- Updates: Jede Änderung im GitHub-Repo baut automatisch eine neue Version. Die App prüft beim
+  Öffnen, lädt die neue Version im Hintergrund und ist beim nächsten Öffnen aktuell.
 
-Damit ist Momentum im Tailnet unter **https://muttchen.tail91b057.ts.net:10000** erreichbar
-(Handy mit aktiver Tailscale-App). Ohne Tailscale auf dem Handy stattdessen öffentlich:
-`tailscale funnel --bg --https=10000 http://127.0.0.1:5180`.
+**Installieren**
 
-Auf dem Handy (Android, Chrome):
+1. Auf dem Handy in Chrome **https://github.com/@@OWNER@@/momentum-app/releases/latest** öffnen →
+   `Momentum.apk` antippen → herunterladen.
+2. Datei öffnen → Android fragt einmal, ob Chrome Apps installieren darf → *Zulassen* → *Installieren*.
+   (Play Protect kann warnen, weil die App nicht aus dem Play Store kommt → „Trotzdem installieren“.)
+3. Momentum öffnen → *Mehr → Einstellungen*:
+   - *Push-Benachrichtigungen → Push aktivieren* → erlauben. Es kommt sofort eine Test-Nachricht.
+   - *Synchronisation über Bridge*: dieselbe **Sync-ID** wie auf dem PC eintragen → „Synchronisation
+     starten“. Haben beide Seiten schon Daten, fragt das Handy, wie zusammengeführt wird.
+4. Damit Erinnerungen pünktlich kommen: Akku-Optimierung für Momentum ausschalten
+   (*Einstellungen → Apps → Momentum → Akku → Nicht eingeschränkt*), vor allem bei Samsung/Xiaomi.
 
-1. `https://muttchen.tail91b057.ts.net:10000` öffnen → Menü → **„App installieren“**.
-2. In der App: *Mehr → Einstellungen → Push-Benachrichtigungen → Push aktivieren* → erlauben.
-   Es kommt sofort eine Test-Nachricht.
-3. *Synchronisation über Bridge*: auf dem PC eine Sync-ID festlegen (oder „Generieren“), auf dem
-   Handy **dieselbe ID** eintragen → „Synchronisation starten“. Haben beide schon Daten, fragt das
-   Handy, wie zusammengeführt werden soll.
-4. Erinnerungen pro Aktivität: Aktivität bearbeiten → „Erinnerung“ + Uhrzeit. Morgen-Kick,
-   Abend-Rettung und Tonlage in den Push-Einstellungen.
+**Updates**
 
-iPhone: Push geht nur, wenn Momentum über Safari → Teilen → „Zum Home-Bildschirm“ installiert ist
-(iOS 16.4+).
+- Normale Änderungen kommen **automatisch** (*Einstellungen → App & Updates* zeigt Version und Status).
+- Nur wenn sich der native Teil der App ändert (`momentum.native` in `package.json` wird erhöht),
+  zeigt die App „Neue App-Version – APK herunterladen“. Einmal installieren, die Daten bleiben.
+- Neue Version veröffentlichen: Änderungen committen und `Momentum-veroeffentlichen.bat`
+  (bzw. `git push`). GitHub baut dann `Momentum.apk`, `web.zip` und `latest.json` als Release.
 
-Hinweis: Jeder Ursprung (Adresse + Port) hat seinen eigenen Speicher. `localhost:5180` und
-`…ts.net:10000` sind für den Browser zwei verschiedene Apps – genau dafür gibt es den Sync.
+**Einmalige GitHub-Einrichtung** (falls noch nicht geschehen): Doppelklick auf
+`Momentum-GitHub-einrichten.bat`. Sie installiert bei Bedarf Git und GitHub CLI, meldet dich im
+Browser an, legt das öffentliche Repo `momentum-app` an, hinterlegt den Signatur-Schlüssel aus
+`signing\` als Secret und lädt alles hoch. Details: [`docs/ANDROID.md`](docs/ANDROID.md).
+
+**Wichtig:** Den Ordner `signing\` (Signatur-Schlüssel) sichern und nie hochladen. Ohne ihn kann
+eine neue APK die installierte App nicht mehr aktualisieren.
+
+iPhone: geht als APK nicht. Dort bleibt nur die Web-Version über den Momentum-Host (siehe unten).
+
+## Momentum am PC (Browser + Momentum-Host)
+
+Am PC läuft Momentum im Browser über den Momentum-Host (siehe Schnellstart). Für die Web-Version
+auf einem anderen Gerät im Tailnet: `tailscale serve --bg --https=10000 http://127.0.0.1:5180`
+→ `https://muttchen.tail91b057.ts.net:10000`. Für das Android-Handy ist das nicht mehr nötig.
+
+Hinweis: Jeder Ursprung (Adresse + Port) und die Android-App haben ihren eigenen Speicher –
+zwischen ihnen gleicht der Sync ab.
 
 ## Tests & Qualität
 
@@ -120,19 +142,23 @@ Beispieldaten anzusehen.
 
 - Gespeichert wird in IndexedDB im Browser – ohne Konto, ohne Cloud, ohne Tracking.
 - Sync: Bridge und der Momentum-Host sehen nur verschlüsselte Nachrichten (Schlüssel = Sync-ID).
-- Push: Der Host speichert die geplanten Benachrichtigungen der nächsten 3 Tage
-  (Titel + Text) in `host/data/push-state.json` auf deinem PC.
+- Push im Browser: Der Host speichert die geplanten Benachrichtigungen der nächsten 3 Tage
+  (Titel + Text) in `host/data/push-state.json` auf deinem PC. Die Android-App plant lokal.
+- Das GitHub-Repo ist öffentlich (nötig, damit die App Updates ohne Passwort laden kann). Es
+  enthält nur Code – keine Daten, keine Sync-ID, keinen Schlüssel. Die Bridge-Adresse steht
+  im Code und in der App.
 - Der Service Worker cached ausschließlich die App-Dateien, keine Nutzerdaten.
 - Backups: *Einstellungen → Daten → Backup exportieren*. Auch mit Sync empfohlen – Sync ist
   kein Backup (ein Löschen wird überall übernommen).
 
 ## Bekannte Einschränkungen
 
-- **Sync und Push brauchen den Momentum-Host** auf dem PC (und Bridge). Ist der PC aus, werden
-  Änderungen gesammelt und später zugestellt (bis 7 Tage); Push-Nachrichten in dieser Zeit fallen aus.
-- Push-Texte werden auf den Geräten erzeugt und beim Host hinterlegt (nächste 3 Tage). Erledigst
-  du etwas, aktualisiert jedes Gerät der Gruppe den Plan – die Abend-Rettung entfällt dann.
-- Ohne Host (z. B. reiner Entwicklungsserver) gibt es nur lokale Erinnerungen, solange die App offen ist.
+- **Android-App:** braucht nur Bridge. Sync läuft, solange die App offen ist; Änderungen von
+  anderen Geräten kommen beim nächsten Öffnen an (Bridge hält sie bis 7 Tage). Die geplanten
+  Benachrichtigungen kennen den Stand vom letzten Öffnen – wer am PC etwas erledigt, bekommt die
+  Abend-Rettung am Handy evtl. trotzdem, bis die App einmal geöffnet wurde.
+- **Browser am PC:** Sync und Web-Push brauchen den Momentum-Host (und Bridge). Ohne Host gibt es
+  nur lokale Erinnerungen, solange der Tab offen ist.
 - **Safari/iOS** kann Website-Daten nicht installierter Seiten nach längerer Nichtnutzung
   löschen. Als App installieren bzw. Backups exportieren. Die App fragt bei installierter
   Nutzung automatisch nach dauerhaftem Speicher.
@@ -144,4 +170,5 @@ Beispieldaten anzusehen.
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) – Aufbau, Datenmodell, Regeln (Serien, Statistik, XP)
 - [`docs/BRIDGE_SYNC.md`](docs/BRIDGE_SYNC.md) – wie der Sync über Bridge funktioniert (Protokoll, Verschlüsselung, Konflikte)
+- [`docs/ANDROID.md`](docs/ANDROID.md) – Android-App: Build über GitHub Actions, Auto-Update, Signatur, Benachrichtigungen
 - [`CLAUDE.md`](CLAUDE.md) – Übergabe-Notizen für künftige Entwicklungs-Sessions

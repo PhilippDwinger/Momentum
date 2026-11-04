@@ -382,6 +382,8 @@ await (BRIDGE ? test : async (name) => console.log(`  - ${name} (übersprungen: 
   // PC: demo data, phone: own activity -> both have data
   await importDemo(pc.page)
   await createActivityMobile(phone.page, 'Vom Handy')
+  // the phone joins the group 5 minutes after the PC (both pages otherwise share the fixed test clock)
+  await phone.page.clock.setFixedTime(new Date(NOW.getTime() + 5 * 60_000))
   for (const [d, name] of [[pc, 'PC'], [phone, 'Handy']]) {
     await d.page.goto(BASE + '#/settings')
     await d.page.locator('#sync-id').fill(id)

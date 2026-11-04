@@ -20,6 +20,8 @@ export interface Prefs {
   pushGroup: string | null
   pushPlanned: number | null
   pushPlannedAt: number | null
+  /** Android app: Bridge server (null = default) */
+  bridgeUrl: string | null
 }
 
 const KEY = 'momentum.prefs.v1'
@@ -37,6 +39,7 @@ const defaults = (): Prefs => ({
   pushGroup: null,
   pushPlanned: null,
   pushPlannedAt: null,
+  bridgeUrl: null,
 })
 
 function load(): Prefs {

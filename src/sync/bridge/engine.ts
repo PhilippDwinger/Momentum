@@ -180,6 +180,11 @@ export class BridgeSync {
       joinedAt: 0,
       ...row,
     }
+    // a different Bridge server (e.g. changed in the app settings) needs a new account there
+    if (this.s.account && this.s.account.server !== this.api.base) {
+      this.s.account = null
+      await this.repo.db.meta.put({ key: META_KEY, value: this.s })
+    }
     if (this.s.enabled && this.s.syncId) this.keys = await deriveGroupKeys(this.s.syncId)
     this.status = this.s.enabled ? (this.s.pendingChoice ? 'choice' : 'connecting') : 'off'
     await this.refreshCounts()

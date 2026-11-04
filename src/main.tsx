@@ -16,15 +16,24 @@ import { applyTheme, usePrefs } from './state/prefs'
 import { ToastProvider } from './state/toast'
 import { BridgeSync } from './sync/bridge/engine'
 import { setBridgeSync } from './sync/bridge/instance'
+import { listenForNotificationActions } from './platform/localNotify'
+import { DEFAULT_BRIDGE_URL, IS_NATIVE, nativeFetch } from './platform/native'
+import { initNativeShell, syncSystemBars } from './platform/shell'
+import { initUpdater } from './platform/updater'
+import { getPrefs } from './state/prefs'
 
 function Root() {
   const prefs = usePrefs()
   useEffect(() => {
     applyTheme(prefs.theme)
+    syncSystemBars()
     document.documentElement.lang = prefs.lang
     if (prefs.theme !== 'system') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const on = () => applyTheme('system')
+    const on = () => {
+      applyTheme('system')
+      syncSystemBars()
+    }
     mq.addEventListener('change', on)
     return () => mq.removeEventListener('change', on)
   }, [prefs.theme, prefs.lang])
@@ -72,21 +81,33 @@ async function boot() {
     const repo = await LocalRepository.open()
     setRepository(repo)
     await ensureSeeded()
-    // device-to-device sync over Bridge (through the Momentum-Host's same-origin proxy)
-    const sync = new BridgeSync(repo, { baseUrl: new URL('bridge', document.baseURI).href })
+    // device-to-device sync over Bridge: in the Android app directly (native HTTP, no CORS),
+    // in the browser through the Momentum-Host's same-origin proxy
+    const sync = new BridgeSync(
+      repo,
+      IS_NATIVE ? { baseUrl: getPrefs().bridgeUrl || DEFAULT_BRIDGE_URL, fetch: nativeFetch } : { baseUrl: new URL('bridge', document.baseURI).href },
+    )
     await sync.load()
     setBridgeSync(sync)
     sync.start()
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') void sync.sendPending().catch(() => {})
     })
-    if (isStandalone()) void navigator.storage?.persist?.()
+    if (IS_NATIVE) {
+      // registered before rendering so a tap that started the app is not lost
+      await listenForNotificationActions((hash) => {
+        window.location.hash = hash
+      }).catch(() => {})
+    } else if (isStandalone()) void navigator.storage?.persist?.()
     root.render(
       <StrictMode>
         <Root />
       </StrictMode>,
     )
-    void initPwa()
+    if (IS_NATIVE) {
+      void initUpdater()
+      void initNativeShell(() => void sync.sendPending().catch(() => {}))
+    } else void initPwa()
   } catch (error) {
     root.render(<Fatal error={error} />)
   }

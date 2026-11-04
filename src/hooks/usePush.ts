@@ -5,9 +5,13 @@ import { useI18n } from '../i18n'
 import type { AppData } from '../state/AppData'
 import { getPrefs, setPrefs, usePrefs } from '../state/prefs'
 import { getBridgeSync, getHostInfo, hostPost } from '../sync/bridge/instance'
+import { cancelLocalPlan, requestLocalPermission, scheduleLocalPlan, sendLocalTest } from '../platform/localNotify'
+import { IS_NATIVE } from '../platform/native'
 
 /**
- * Web Push via the Momentum-Host. The device generates its notification plan (motivational
+ * Notifications.
+ * - Android app: scheduled on the phone itself (see platform/localNotify.ts) – no server.
+ * - Browser: Web Push via the Momentum-Host. The device generates its notification plan (motivational
  * texts included) from the current data and uploads it; the host delivers each item on time,
  * also when the app is closed. Every device of a sync group uploads for the whole group, so a
  * reminder disappears everywhere once it is done on any device.
@@ -16,6 +20,7 @@ import { getBridgeSync, getHostInfo, hostPost } from '../sync/bridge/instance'
 export type PushAvailability = 'ok' | 'unsupported' | 'insecure'
 
 export function pushAvailability(): PushAvailability {
+  if (IS_NATIVE) return 'ok'
   if (!window.isSecureContext) return 'insecure'
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return 'unsupported'
   return 'ok'
@@ -35,6 +40,11 @@ function keyToBytes(base64: string): Uint8Array {
 }
 
 export async function enablePush(label: string): Promise<void> {
+  if (IS_NATIVE) {
+    if (!(await requestLocalPermission())) throw new Error('denied')
+    setPrefs({ pushEnabled: true, pushGroup: null })
+    return
+  }
   if (pushAvailability() !== 'ok') throw new Error(pushAvailability())
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('denied')
@@ -58,6 +68,11 @@ export async function enablePush(label: string): Promise<void> {
 }
 
 export async function disablePush(): Promise<void> {
+  if (IS_NATIVE) {
+    await cancelLocalPlan()
+    setPrefs({ pushEnabled: false, pushGroup: null, pushPlanned: 0 })
+    return
+  }
   const prefs = getPrefs()
   try {
     const reg = await navigator.serviceWorker.ready
@@ -69,7 +84,11 @@ export async function disablePush(): Promise<void> {
   setPrefs({ pushEnabled: false, pushGroup: null })
 }
 
-export async function sendTestPush(title: string, body: string): Promise<number> {
+export async function sendTestPush(title: string, body: string, lang: 'de' | 'en' = 'de'): Promise<number> {
+  if (IS_NATIVE) {
+    await sendLocalTest(title, body, lang)
+    return 1
+  }
   const r = await hostPost<{ delivered: number }>('push/test', { group: currentPushGroup(), device: getRepository().deviceId, title, body })
   return r.delivered
 }
@@ -82,14 +101,8 @@ export function usePushPlanner(data: AppData) {
 
   useEffect(() => {
     if (!prefs.pushEnabled) return
-    const upload = async () => {
-      const group = currentPushGroup()
-      const device = getRepository().deviceId
-      // sync group changed since subscribing -> move the subscription
-      if (prefs.pushGroup && prefs.pushGroup !== group) {
-        await enablePush('').catch(() => {})
-      }
-      const items = buildNotificationPlan({
+    const plan = (horizonDays: number) =>
+      buildNotificationPlan({
         index: data.index,
         streaks: data.game.streaks,
         now: new Date(),
@@ -99,16 +112,43 @@ export function usePushPlanner(data: AppData) {
         helpers: { lang, amount },
         xpToNext: data.game.level.span - data.game.level.intoLevel,
         nextLevel: data.game.level.level + 1,
+        horizonDays,
       })
+    const upload = async () => {
+      if (IS_NATIVE) {
+        // on the phone: a week ahead, so reminders keep coming even if the app stays closed
+        const n = await scheduleLocalPlan(plan(7), lang)
+        setPrefs({ pushPlanned: n, pushPlannedAt: Date.now() })
+        return
+      }
+      const group = currentPushGroup()
+      const device = getRepository().deviceId
+      // sync group changed since subscribing -> move the subscription
+      if (prefs.pushGroup && prefs.pushGroup !== group) {
+        await enablePush('').catch(() => {})
+      }
+      const items = plan(3)
       await hostPost('push/plan', { group, device, items })
       setPrefs({ pushPlanned: items.length, pushPlannedAt: Date.now() })
     }
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => void upload().catch(() => {}), 2500)
     const periodic = setInterval(() => void upload().catch(() => {}), 30 * 60 * 1000)
+    let resume: { remove: () => Promise<void> } | null = null
+    let cancelled = false
+    if (IS_NATIVE) {
+      void import('@capacitor/app').then(({ App }) =>
+        App.addListener('resume', () => void upload().catch(() => {})).then((h) => {
+          if (cancelled) void h.remove()
+          else resume = h
+        }),
+      )
+    }
     return () => {
+      cancelled = true
       if (timer.current) clearTimeout(timer.current)
       clearInterval(periodic)
+      void resume?.remove()
     }
   }, [data, prefs.pushEnabled, prefs.pushGroup, lang, amount])
 }

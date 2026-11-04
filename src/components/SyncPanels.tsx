@@ -12,14 +12,52 @@ import { useUI } from '../state/uiContext'
 import { generateSyncId } from '../sync/bridge/crypto'
 import type { InitialChoice } from '../sync/bridge/engine'
 import { getBridgeSync, getHostInfo, useBridgeSync, type HostInfo } from '../sync/bridge/instance'
+import { exactAlarmsGranted, localPermission, openExactAlarmSettings, type LocalPermission } from '../platform/localNotify'
+import { DEFAULT_BRIDGE_URL, IS_NATIVE, normalizeBridgeUrl } from '../platform/native'
+import { setPrefs } from '../state/prefs'
 import { Modal } from './Modal'
 
+/** Momentum-Host info (browser only – the Android app needs no host). */
 function useHost(): HostInfo | null | undefined {
   const [info, setInfo] = useState<HostInfo | null | undefined>(undefined)
   useEffect(() => {
-    void getHostInfo().then(setInfo)
+    if (!IS_NATIVE) void getHostInfo().then(setInfo)
   }, [])
   return info
+}
+
+/** Bridge server of the Android app (direct connection). Changing it restarts the app. */
+function BridgeServerField() {
+  const { t } = useI18n()
+  const prefs = usePrefs()
+  const toast = useToast()
+  const current = prefs.bridgeUrl || DEFAULT_BRIDGE_URL
+  const [value, setValue] = useState(current)
+  return (
+    <div className="field">
+      <label htmlFor="sync-server">{t('sync.server')}</label>
+      <div className="input-group">
+        <input id="sync-server" className="input" value={value} onChange={(e) => setValue(e.target.value)} inputMode="url" autoComplete="off" spellCheck={false} />
+        <button
+          type="button"
+          className="btn"
+          disabled={value.trim() === current}
+          onClick={() => {
+            const url = normalizeBridgeUrl(value)
+            if (!url) {
+              toast({ message: t('sync.serverInvalid'), tone: 'error' })
+              return
+            }
+            setPrefs({ bridgeUrl: url === DEFAULT_BRIDGE_URL ? null : url })
+            window.location.reload()
+          }}
+        >
+          {t('sync.serverSave')}
+        </button>
+      </div>
+      <span className="field-hint">{t('sync.serverHint')}</span>
+    </div>
+  )
 }
 
 function ago(ms: number, lang: string): string {
@@ -69,7 +107,8 @@ export function SyncSettings() {
         </span>
       </h2>
       <p className="field-hint">{t('sync.intro')}</p>
-      {host === null && <p className="hint small">{t('sync.noHost')}</p>}
+      {IS_NATIVE && <BridgeServerField />}
+      {!IS_NATIVE && host === null && <p className="hint small">{t('sync.noHost')}</p>}
       {host && <p className="field-hint">{t('sync.host', { url: host.bridge })}</p>}
 
       {!on ? (
@@ -94,7 +133,7 @@ export function SyncSettings() {
             <label htmlFor="sync-device">{t('sync.deviceName')}</label>
             <input id="sync-device" className="input" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder={t('sync.deviceNamePlaceholder')} maxLength={40} />
           </div>
-          <button type="submit" className="btn btn-primary" disabled={busy || syncId.trim().length < 4 || host === null}>
+          <button type="submit" className="btn btn-primary" disabled={busy || syncId.trim().length < 4 || (!IS_NATIVE && host === null)}>
             {t('sync.start')}
           </button>
         </form>
@@ -192,7 +231,7 @@ export function SyncSettings() {
 }
 
 export function PushSettings() {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const { index } = useAppData()
   const prefs = usePrefs()
   const host = useHost()
@@ -200,7 +239,30 @@ export function PushSettings() {
   const [busy, setBusy] = useState(false)
   const s = index.settings
   const avail = pushAvailability()
-  const denied = 'Notification' in window && Notification.permission === 'denied'
+  const [nativePerm, setNativePerm] = useState<LocalPermission | null>(null)
+  const [exact, setExact] = useState(true)
+  useEffect(() => {
+    if (!IS_NATIVE) return
+    const refresh = () => {
+      void localPermission().then(setNativePerm).catch(() => {})
+      void exactAlarmsGranted().then(setExact)
+    }
+    refresh()
+    let h: { remove: () => Promise<void> } | null = null
+    let gone = false
+    void import('@capacitor/app').then(({ App }) =>
+      App.addListener('resume', refresh).then((x) => {
+        if (gone) void x.remove()
+        else h = x
+      }),
+    )
+    return () => {
+      gone = true
+      void h?.remove()
+    }
+  }, [])
+  const denied = IS_NATIVE ? nativePerm === 'denied' : 'Notification' in window && Notification.permission === 'denied'
+  const needsHost = !IS_NATIVE && host === null
   const save = (patch: Partial<typeof s>) => void updateSettings(s, patch)
 
   const toggle = async () => {
@@ -209,7 +271,7 @@ export function PushSettings() {
       if (prefs.pushEnabled) await disablePush()
       else {
         await enablePush(getBridgeSync()?.getSnapshot().state.deviceName || navigator.platform || 'Gerät')
-        await sendTestPush('Momentum', t('push.testBody')).catch(() => 0)
+        await sendTestPush('Momentum', t('push.testBody'), lang).catch(() => 0)
       }
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)
@@ -225,20 +287,28 @@ export function PushSettings() {
         <BellRing size={17} aria-hidden /> {t('push.title')}
         {prefs.pushEnabled && <span className="badge success" style={{ marginLeft: 'auto' }}>{t('push.on')}</span>}
       </h2>
-      <p className="field-hint">{t('push.intro')}</p>
+      <p className="field-hint">{IS_NATIVE ? t('push.introApp') : t('push.intro')}</p>
       {avail === 'insecure' && <p className="hint small">{t('push.insecure')}</p>}
       {avail === 'unsupported' && <p className="hint small">{t('push.unsupported')}</p>}
-      {denied && <p className="hint small">{t('push.denied')}</p>}
-      {host === null && avail === 'ok' && <p className="hint small">{t('sync.noHost')}</p>}
+      {denied && <p className="hint small">{IS_NATIVE ? t('push.deniedApp') : t('push.denied')}</p>}
+      {needsHost && avail === 'ok' && <p className="hint small">{t('sync.noHost')}</p>}
+      {IS_NATIVE && prefs.pushEnabled && !exact && (
+        <div className="hint">
+          <div>{t('push.exact')}</div>
+          <button className="btn btn-sm" onClick={() => void openExactAlarmSettings()}>
+            {t('push.exactButton')}
+          </button>
+        </div>
+      )}
       <div className="button-stack">
-        <button className={`btn ${prefs.pushEnabled ? '' : 'btn-primary'}`} disabled={busy || avail !== 'ok' || host === null} onClick={() => void toggle()}>
+        <button className={`btn ${prefs.pushEnabled ? '' : 'btn-primary'}`} disabled={busy || avail !== 'ok' || needsHost} onClick={() => void toggle()}>
           {prefs.pushEnabled ? t('push.disable') : t('push.enable')}
         </button>
         {prefs.pushEnabled && (
           <button
             className="btn"
             onClick={async () => {
-              const n = await sendTestPush('Momentum', t('push.testBody')).catch(() => 0)
+              const n = await sendTestPush('Momentum', t('push.testBody'), lang).catch(() => 0)
               toast({ message: n > 0 ? t('push.testSent') : t('push.failed', { message: '0' }), tone: n > 0 ? 'success' : 'error' })
             }}
           >

@@ -1,0 +1,117 @@
+# Baut bei jedem Push die Android-App und veröffentlicht sie als GitHub-Release.
+# Die installierte App holt sich darüber automatisch die neue Version (src/platform/updater.ts):
+#   web.zip      -> stilles Update der App-Oberfläche (Prüfsumme sha256 in latest.json)
+#   Momentum.apk -> komplette App (nur nötig, wenn package.json "momentum.native" erhöht wurde)
+#   latest.json  -> Versionsinfo, abrufbar unter releases/latest/download/latest.json
+name: Android-App bauen
+
+on:
+  push:
+    branches: [master, main]
+    paths-ignore: ['**.md', 'docs/**', 'host/**', '*.bat']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BUILD: ${{ github.run_number }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Versionsnummern
+        run: |
+          NATIVE=$(node -p "require('./package.json').momentum.native")
+          MIN_NATIVE=$(node -p "require('./package.json').momentum.minNative")
+          BASE=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          {
+            echo "NATIVE=$NATIVE"
+            echo "MIN_NATIVE=$MIN_NATIVE"
+            echo "VERSION=$BASE.$BUILD"
+            echo "VERSION_CODE=$((NATIVE * 100000 + BUILD))"
+          } >> "$GITHUB_ENV"
+
+      - name: Abhängigkeiten
+        run: npm ci
+
+      - name: Tests
+        run: npx vitest run
+
+      - name: Web-Bundle bauen
+        env:
+          VITE_APP_VERSION: ${{ env.VERSION }}
+          VITE_APP_BUILD: ${{ env.BUILD }}
+          VITE_UPDATE_URL: https://github.com/${{ github.repository }}/releases/latest/download/latest.json
+          VITE_RELEASES_PAGE: https://github.com/${{ github.repository }}/releases
+          VITE_BRIDGE_URL: ${{ vars.BRIDGE_URL }}
+        run: npm run build:app
+
+      - name: web.zip + Prüfsumme
+        run: |
+          (cd dist && zip -qrX ../web.zip .)
+          echo "SHA=$(sha256sum web.zip | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Android-Projekt aktualisieren
+        run: npx cap sync android
+
+      - name: Signatur-Schlüssel
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::Secret ANDROID_KEYSTORE_B64 fehlt (siehe README, GitHub)"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/momentum.jks"
+          echo "MOMENTUM_KEYSTORE=$RUNNER_TEMP/momentum.jks" >> "$GITHUB_ENV"
+
+      - name: APK bauen
+        working-directory: android
+        env:
+          MOMENTUM_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace -PmomentumVersionCode="$VERSION_CODE" -PmomentumVersionName="$VERSION"
+
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk Momentum.apk
+          TAG="build-$BUILD"
+          export DL="https://github.com/$REPO/releases/download/$TAG"
+          export NOTES="$(git log -1 --pretty=%s | head -c 300)"
+          node -e '
+            const e = process.env
+            require("fs").writeFileSync("latest.json", JSON.stringify({
+              version: e.VERSION, build: +e.BUILD, native: +e.NATIVE, minNative: +e.MIN_NATIVE,
+              web: e.DL + "/web.zip", apk: e.DL + "/Momentum.apk", sha256: e.SHA,
+              notes: e.NOTES, date: new Date().toISOString(),
+            }, null, 2))'
+          cat latest.json
+          gh release create "$TAG" Momentum.apk web.zip latest.json --repo "$REPO" \
+            --title "Momentum $VERSION" --notes "$NOTES" --latest
+
+      - name: Alte Releases aufräumen (die letzten 10 bleiben)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$REPO" --limit 100 --json tagName,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[10:] | .[].tagName' \
+            | xargs -r -n1 gh release delete --repo "$REPO" --cleanup-tag --yes
