@@ -13,7 +13,7 @@ import { generateSyncId } from '../sync/bridge/crypto'
 import type { InitialChoice } from '../sync/bridge/engine'
 import { getBridgeSync, getHostInfo, useBridgeSync, type HostInfo } from '../sync/bridge/instance'
 import { exactAlarmsGranted, localPermission, openExactAlarmSettings, type LocalPermission } from '../platform/localNotify'
-import { DEFAULT_BRIDGE_URL, IS_NATIVE, normalizeBridgeUrl } from '../platform/native'
+import { BROWSER_APP_URL, DEFAULT_BRIDGE_URL, getConnection, IS_NATIVE, normalizeBridgeUrl } from '../platform/native'
 import { setPrefs } from '../state/prefs'
 import { Modal } from './Modal'
 
@@ -76,6 +76,8 @@ export function SyncSettings() {
   const toast = useToast()
   const ui = useUI()
   const engine = getBridgeSync()
+  const conn = getConnection()
+  const mode = conn?.mode ?? 'proxy'
   const [syncId, setSyncId] = useState('')
   const [deviceName, setDeviceName] = useState(() => (/android|iphone|ipad/i.test(navigator.userAgent) ? 'Handy' : 'PC'))
   const [reveal, setReveal] = useState(false)
@@ -108,8 +110,14 @@ export function SyncSettings() {
       </h2>
       <p className="field-hint">{t('sync.intro')}</p>
       {IS_NATIVE && <BridgeServerField />}
-      {!IS_NATIVE && host === null && <p className="hint small">{t('sync.noHost')}</p>}
-      {host && <p className="field-hint">{t('sync.host', { url: host.bridge })}</p>}
+      {mode === 'direct' && <p className="field-hint">{t('sync.direct', { url: conn?.server ?? '' })}</p>}
+      {mode === 'proxy' && host && <p className="field-hint">{t('sync.host', { url: host.bridge })}</p>}
+      {mode === 'proxy' && host === null && (
+        <p className="hint small">
+          {t('sync.openDirect')}{' '}
+          <a href={BROWSER_APP_URL}>{BROWSER_APP_URL}</a>
+        </p>
+      )}
 
       {!on ? (
         <form
@@ -133,7 +141,7 @@ export function SyncSettings() {
             <label htmlFor="sync-device">{t('sync.deviceName')}</label>
             <input id="sync-device" className="input" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder={t('sync.deviceNamePlaceholder')} maxLength={40} />
           </div>
-          <button type="submit" className="btn btn-primary" disabled={busy || syncId.trim().length < 4 || (!IS_NATIVE && host === null)}>
+          <button type="submit" className="btn btn-primary" disabled={busy || syncId.trim().length < 4 || (mode === 'proxy' && host === null)}>
             {t('sync.start')}
           </button>
         </form>
@@ -275,7 +283,7 @@ export function PushSettings() {
       }
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)
-      toast({ message: m === 'denied' ? t('push.denied') : m === 'no-host' ? t('sync.noHost') : t('push.failed', { message: m }), tone: 'error', duration: 7000 })
+      toast({ message: m === 'denied' ? t('push.denied') : m === 'no-host' ? t('push.noHost') : t('push.failed', { message: m }), tone: 'error', duration: 7000 })
     } finally {
       setBusy(false)
     }
@@ -291,7 +299,7 @@ export function PushSettings() {
       {avail === 'insecure' && <p className="hint small">{t('push.insecure')}</p>}
       {avail === 'unsupported' && <p className="hint small">{t('push.unsupported')}</p>}
       {denied && <p className="hint small">{IS_NATIVE ? t('push.deniedApp') : t('push.denied')}</p>}
-      {needsHost && avail === 'ok' && <p className="hint small">{t('sync.noHost')}</p>}
+      {needsHost && avail === 'ok' && <p className="hint small">{t('push.noHost')}</p>}
       {IS_NATIVE && prefs.pushEnabled && !exact && (
         <div className="hint">
           <div>{t('push.exact')}</div>

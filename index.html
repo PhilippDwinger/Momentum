@@ -14,6 +14,13 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <title>Momentum</title>
     <script>
+      // …/momentum (without slash) -> …/momentum/ so relative asset paths resolve
+      ;(function () {
+        var p = location.pathname
+        if (p.length > 1 && p.slice(-1) !== '/' && p.split('/').pop().indexOf('.') < 0) location.replace(p + '/' + location.search + location.hash)
+      })()
+    </script>
+    <script>
       // Apply theme before first paint to avoid a flash.
       ;(function () {
         try {

@@ -8,13 +8,13 @@ import type { UserSettings } from '../domain/types'
 import { isStandalone, usePwa, useStoragePersisted } from '../hooks/usePwa'
 import { AppUpdatePanel } from '../components/AppUpdatePanel'
 import { IS_NATIVE } from '../platform/native'
+import { APP_BUILD, APP_VERSION } from '../platform/updater'
 import { useI18n, type Lang } from '../i18n'
 import { useAppData } from '../state/AppData'
 import { applyTheme, setPrefs, usePrefs, type Prefs } from '../state/prefs'
 import { useToast } from '../state/toast'
 import { useUI } from '../state/uiContext'
 
-const APP_VERSION = '1.2.0'
 
 const timeZones: string[] = (() => {
   try {
@@ -234,14 +234,25 @@ export function SettingsPage() {
           <p className="field-hint">{t('settings.installHint')}</p>
         )}
         {pwa.offlineReady && <p className="small" style={{ marginTop: 8 }}><span className="badge success">{t('settings.offlineReady')}</span></p>}
+        <p className="field-hint" style={{ marginTop: 8 }}>{t('settings.autoUpdate')}</p>
+        {pwa.needRefresh && pwa.update && (
+          <div className="hint">
+            <div>{t('toast.updateReady')}</div>
+            <button className="btn btn-primary btn-sm" onClick={() => void pwa.update?.()}>
+              {t('toast.update')}
+            </button>
+          </div>
+        )}
         <div className="setting-row" style={{ marginTop: 8 }}>
-          <span className="subtle small">{t('settings.version', { version: APP_VERSION })}</span>
+          <span className="subtle small">{t('settings.version', { version: APP_BUILD ? `${APP_VERSION} (Build ${APP_BUILD})` : APP_VERSION })}</span>
           <button className="btn btn-ghost btn-sm hide-mobile" onClick={() => ui.open({ type: 'shortcuts' })}>
             <Keyboard size={15} /> {t('settings.shortcuts')}
           </button>
         </div>
       </section>
       )}
+
+      <p className="update-test" data-testid="update-test">{t('settings.updateTest', { build: APP_BUILD || '–' })}</p>
     </div>
   )
 }

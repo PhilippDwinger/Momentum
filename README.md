@@ -35,7 +35,8 @@ richtig motivierenden Texten kommen auch bei geschlossener App aufs Handy.
   Suche & Filter, Kategorien verwalten.
 - **Daten**: JSON-Backup exportieren/importieren (Zusammenführen oder Ersetzen, mit Validierung),
   Verlauf als CSV.
-- **Sync über Bridge**: Sync-ID festlegen, alle Geräte mit derselben ID gleichen sich ab. Beim
+- **Sync über Bridge**: Sync-ID festlegen, alle Geräte mit derselben ID gleichen sich ab – auch im
+  Browser direkt mit Bridge (`https://muttchen.tail91b057.ts.net:8443/momentum/`). Beim
   ersten Kontakt mit Daten auf beiden Seiten wählst du: zusammenführen, Daten der Gruppe oder
   Daten dieses Geräts. Gleichzeitige Änderungen werden als Konflikt angezeigt (oder automatisch
   „neuere gewinnt“). Details: [`docs/BRIDGE_SYNC.md`](docs/BRIDGE_SYNC.md).
@@ -45,33 +46,48 @@ richtig motivierenden Texten kommen auch bei geschlossener App aufs Handy.
 - **Zeitzone** einstellbar (oder automatisch pro Gerät).
 - Hell/Dunkel/System, Deutsch/Englisch, Tastenkürzel (`N`, `T`, `←/→`, `1–7`, `/`, `?`).
 
-## Schnellstart (Windows, auf dem PC „muttchen“)
+## Schnellstart: Momentum im Browser (PC + Handy)
 
-Voraussetzung: [Node.js](https://nodejs.org) 22 LTS (mindestens 20.19).
+Momentum läuft unter der Adresse deines Bridge-Servers:
 
-Doppelklick auf **`Momentum-Host-starten.bat`** (im Momentum-Ordner) – oder in CMD:
+**https://muttchen.tail91b057.ts.net:8443/momentum/**
 
-```bat
-cd /d C:\Users\phili\Documents\Momentum
-npm install
-npm start
-```
+Weil die App unter derselben Adresse wie Bridge liegt, redet der Browser **direkt mit Bridge**
+(von jeder anderen Adresse aus verbietet der Browser das, weil Bridge keine CORS-Freigabe sendet).
+An Bridge selbst ändert sich nichts: Tailscale leitet nur den Pfad `/momentum` an den
+Momentum-Host auf deinem PC weiter, alles andere geht wie bisher an Bridge.
 
-Das baut die App und startet den **Momentum-Host** auf `http://localhost:5180`. Der Host
+Einmalig auf dem PC „muttchen“ (Voraussetzung: [Node.js](https://nodejs.org) 22 LTS):
 
-1. liefert die App aus (auch offline-fähig als PWA),
-2. reicht `/bridge/*` 1:1 an Bridge weiter (`https://muttchen.tail91b057.ts.net:8443`) –
-   nötig, weil Bridge keine CORS-Header sendet; an Bridge selbst ändert das nichts,
-3. verschickt die Push-Benachrichtigungen.
+1. Doppelklick auf `C:\Users\phili\Documents\Momentum\Momentum-Host-starten.bat`
+   (Fenster offen lassen; Autostart: Verknüpfung zur `.bat` in `shell:startup` legen).
+2. Der Host richtet die Tailscale-Weiterleitung `…:8443/momentum` selbst ein (gleiche
+   Sichtbarkeit wie Bridge: öffentlich per Funnel) und prüft sie alle 5 Minuten. Von Hand ginge es so:
+   ```bat
+   tailscale funnel --bg --https=8443 --set-path=/momentum http://127.0.0.1:5180
+   ```
+3. Er lädt die neueste App-Version von GitHub (alle 5 Minuten neu geprüft).
 
-Das Fenster muss offen bleiben, solange Sync und Push laufen sollen (Autostart: Verknüpfung zur
-`.bat` in `shell:startup` legen). Andere Bridge-Adresse: `set BRIDGE_URL=https://…` vor `npm start`.
+Auf dem Handy (Chrome) und am PC: die Adresse oben öffnen → Menü → **„App installieren“**
+(geht das nicht, „Zum Startbildschirm hinzufügen“). Dann *Einstellungen*:
+Push aktivieren, Sync-ID eintragen → „Synchronisation starten“.
 
-Nur entwickeln ohne Host: `npm run dev` (Vite leitet `/bridge` ebenfalls an Bridge weiter).
+**Updates:** Nie neu installieren. Jeder Push ins GitHub-Repo baut eine neue Version, der Host
+lädt sie, die App zeigt „Eine neue Version ist verfügbar – Aktualisieren“ (oder ist beim
+nächsten Öffnen aktuell). Ganz unten in den Einstellungen steht zum Prüfen ein „Update-Test“-Satz
+mit der Build-Nummer.
 
-## Momentum aufs Handy (Android-App)
+Was der Host macht: App-Dateien ausliefern + aktuell halten, Push-Nachrichten verschicken
+(Web-Push braucht einen Absender, Bridge schickt nie von sich aus). Gesynct wird nur über Bridge.
+Ist der Host aus, läuft die installierte App trotzdem (offline-fähig) und synct weiter direkt
+über Bridge – nur Push-Nachrichten bleiben dann aus.
 
-Auf dem Handy ist Momentum eine **echte Android-App (APK)**. Sie läuft ohne PC und ohne Tailscale:
+Entwickeln: `npm run dev` (Vite leitet `/bridge` an Bridge weiter).
+
+## Alternativ: Android-App (APK)
+
+Wenn auf dem Handy APK-Installationen erlaubt sind (eine Kindersicherung wie Family Link blockt
+sie), gibt es Momentum auch als **echte Android-App**. Sie läuft ohne PC und ohne Tailscale:
 
 - Sync: Die App redet **direkt mit deinem Bridge-Server** `https://muttchen.tail91b057.ts.net:8443`
   (über Androids eigenen HTTP-Stack, deshalb stört das fehlende CORS von Bridge nicht).
@@ -109,16 +125,13 @@ Browser an, legt das öffentliche Repo `Momentum` an, hinterlegt den Signatur-Sc
 **Wichtig:** Den Ordner `signing\` (Signatur-Schlüssel) sichern und nie hochladen. Ohne ihn kann
 eine neue APK die installierte App nicht mehr aktualisieren.
 
-iPhone: geht als APK nicht. Dort bleibt nur die Web-Version über den Momentum-Host (siehe unten).
+iPhone: geht als APK nicht – dort die Browser-Version (oben) nehmen.
 
-## Momentum am PC (Browser + Momentum-Host)
+## Andere Adressen
 
-Am PC läuft Momentum im Browser über den Momentum-Host (siehe Schnellstart). Für die Web-Version
-auf einem anderen Gerät im Tailnet: `tailscale serve --bg --https=10000 http://127.0.0.1:5180`
-→ `https://muttchen.tail91b057.ts.net:10000`. Für das Android-Handy ist das nicht mehr nötig.
-
-Hinweis: Jeder Ursprung (Adresse + Port) und die Android-App haben ihren eigenen Speicher –
-zwischen ihnen gleicht der Sync ab.
+`http://localhost:5180` (direkt am PC) funktioniert auch: Dort reicht der Host `/bridge/*` an
+Bridge weiter. Jede Adresse hat aber ihren eigenen Speicher – am besten überall die Adresse oben
+benutzen und zwischen Geräten per Sync-ID abgleichen.
 
 ## Tests & Qualität
 
@@ -127,6 +140,7 @@ npm test             # Unit-Tests (Vitest) – Wiederholung, Serien, Statistik, 
 npm run typecheck    # TypeScript
 npm run lint         # ESLint
 npm run build && npm run test:e2e   # Browser-E2E gegen den Produktions-Build (über den Host)
+node e2e/run-direct.mjs              # Browser direkt über Bridge unter /momentum/ + Host-Auto-Update (braucht BRIDGE_TEST_URL)
 
 # mit einem echten Bridge-Server (z. B. lokal auf Port 8002):
 set BRIDGE_TEST_URL=http://127.0.0.1:8002
@@ -157,8 +171,9 @@ Beispieldaten anzusehen.
   anderen Geräten kommen beim nächsten Öffnen an (Bridge hält sie bis 7 Tage). Die geplanten
   Benachrichtigungen kennen den Stand vom letzten Öffnen – wer am PC etwas erledigt, bekommt die
   Abend-Rettung am Handy evtl. trotzdem, bis die App einmal geöffnet wurde.
-- **Browser am PC:** Sync und Web-Push brauchen den Momentum-Host (und Bridge). Ohne Host gibt es
-  nur lokale Erinnerungen, solange der Tab offen ist.
+- **Browser-App:** Sync braucht nur Bridge (direkt, unter `…:8443/momentum/`). Push-Nachrichten
+  verschickt der Momentum-Host – ist der PC aus, kommen sie nicht (Bridge läuft ja auch auf dem PC).
+  Der Push-Plan reicht 3 Tage im Voraus.
 - **Safari/iOS** kann Website-Daten nicht installierter Seiten nach längerer Nichtnutzung
   löschen. Als App installieren bzw. Backups exportieren. Die App fragt bei installierter
   Nutzung automatisch nach dauerhaftem Speicher.

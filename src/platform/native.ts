@@ -12,6 +12,34 @@ export const IS_NATIVE = Capacitor.isNativePlatform()
 
 export const DEFAULT_BRIDGE_URL = import.meta.env.VITE_BRIDGE_URL || 'https://muttchen.tail91b057.ts.net:8443'
 
+/** Where the browser app should open so it can talk to Bridge directly. */
+export const BROWSER_APP_URL = `${DEFAULT_BRIDGE_URL}/momentum/`
+
+export type BridgeMode = 'native' | 'direct' | 'proxy'
+
+/**
+ * How this copy of Momentum reaches Bridge:
+ * - native: Android app, native HTTP (no CORS)
+ * - direct: browser app opened under Bridge's own address (…:8443/momentum/) – same origin
+ * - proxy:  browser app opened elsewhere (e.g. http://localhost:5180) – via the Momentum-Host
+ */
+export function bridgeConnection(configured: string | null): { mode: BridgeMode; base: string; server: string } {
+  const server = configured || DEFAULT_BRIDGE_URL
+  if (IS_NATIVE) return { mode: 'native', base: server, server }
+  let origin = ''
+  try {
+    origin = new URL(server).origin
+  } catch {
+    /* invalid -> proxy */
+  }
+  if (origin && origin === window.location.origin) return { mode: 'direct', base: origin, server }
+  return { mode: 'proxy', base: new URL('bridge', document.baseURI).href, server }
+}
+
+let connection: ReturnType<typeof bridgeConnection> | null = null
+export const setConnection = (c: ReturnType<typeof bridgeConnection>) => (connection = c)
+export const getConnection = () => connection
+
 /** fetch() replacement for the Bridge client that uses the native HTTP stack (no CORS). */
 export const nativeFetch: FetchLike = async (input, init) => {
   const headers: Record<string, string> = {}

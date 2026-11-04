@@ -17,7 +17,7 @@ import { ToastProvider } from './state/toast'
 import { BridgeSync } from './sync/bridge/engine'
 import { setBridgeSync } from './sync/bridge/instance'
 import { listenForNotificationActions } from './platform/localNotify'
-import { DEFAULT_BRIDGE_URL, IS_NATIVE, nativeFetch } from './platform/native'
+import { bridgeConnection, IS_NATIVE, nativeFetch, setConnection } from './platform/native'
 import { initNativeShell, syncSystemBars } from './platform/shell'
 import { initUpdater } from './platform/updater'
 import { getPrefs } from './state/prefs'
@@ -81,12 +81,11 @@ async function boot() {
     const repo = await LocalRepository.open()
     setRepository(repo)
     await ensureSeeded()
-    // device-to-device sync over Bridge: in the Android app directly (native HTTP, no CORS),
-    // in the browser through the Momentum-Host's same-origin proxy
-    const sync = new BridgeSync(
-      repo,
-      IS_NATIVE ? { baseUrl: getPrefs().bridgeUrl || DEFAULT_BRIDGE_URL, fetch: nativeFetch } : { baseUrl: new URL('bridge', document.baseURI).href },
-    )
+    // device-to-device sync over Bridge: Android app directly (native HTTP), browser directly when
+    // opened under Bridge's address (…:8443/momentum/), otherwise through the Momentum-Host proxy
+    const conn = bridgeConnection(getPrefs().bridgeUrl)
+    setConnection(conn)
+    const sync = new BridgeSync(repo, conn.mode === 'native' ? { baseUrl: conn.base, fetch: nativeFetch } : { baseUrl: conn.base })
     await sync.load()
     setBridgeSync(sync)
     sync.start()

@@ -56,6 +56,8 @@ export default defineConfig(({ mode }) => ({
         globIgnores: ['**/*-cyrillic*', '**/*-greek*', '**/*-vietnamese*'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
+        // the first visit is controlled right away, so later updates can switch over on "Aktualisieren"
+        clientsClaim: true,
         runtimeCaching: [],
         // push + notification click handling (public/push-sw.js)
         importScripts: ['push-sw.js'],

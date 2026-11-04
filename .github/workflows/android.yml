@@ -1,9 +1,10 @@
 # Repo: https://github.com/PhilippDwinger/Momentum
-# Baut bei jedem Push die Android-App und veröffentlicht sie als GitHub-Release.
-# Die installierte App holt sich darüber automatisch die neue Version (src/platform/updater.ts):
-#   web.zip      -> stilles Update der App-Oberfläche (Prüfsumme sha256 in latest.json)
-#   Momentum.apk -> komplette App (nur nötig, wenn package.json "momentum.native" erhöht wurde)
-#   latest.json  -> Versionsinfo, abrufbar unter releases/latest/download/latest.json
+# Baut bei jedem Push die Browser-App und die Android-App und veröffentlicht sie als GitHub-Release.
+# Darüber aktualisiert sich alles selbst:
+#   pwa.json.gz  -> Browser-App; der Momentum-Host auf dem PC lädt sie (host/server.mjs)
+#   web.zip      -> stilles Update der Android-App-Oberfläche (src/platform/updater.ts)
+#   Momentum.apk -> komplette Android-App (nur nötig, wenn package.json "momentum.native" erhöht wurde)
+#   latest.json  -> Versionsinfo + sha256, abrufbar unter releases/latest/download/latest.json
 name: Android-App bauen
 
 on:
@@ -57,6 +58,16 @@ jobs:
       - name: Tests
         run: npx vitest run
 
+      - name: Browser-App bauen (PWA, für den Momentum-Host auf dem PC)
+        env:
+          VITE_APP_VERSION: ${{ env.VERSION }}
+          VITE_APP_BUILD: ${{ env.BUILD }}
+          VITE_BRIDGE_URL: ${{ vars.BRIDGE_URL }}
+        run: |
+          npm run build
+          node tools/pack-web.mjs dist pwa.json.gz "$BUILD" "$VERSION"
+          echo "PWA_SHA=$(sha256sum pwa.json.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
       - name: Web-Bundle bauen
         env:
           VITE_APP_VERSION: ${{ env.VERSION }}
@@ -103,10 +114,11 @@ jobs:
             require("fs").writeFileSync("latest.json", JSON.stringify({
               version: e.VERSION, build: +e.BUILD, native: +e.NATIVE, minNative: +e.MIN_NATIVE,
               web: e.DL + "/web.zip", apk: e.DL + "/Momentum.apk", sha256: e.SHA,
+              pwa: e.DL + "/pwa.json.gz", pwaSha256: e.PWA_SHA,
               notes: e.NOTES, date: new Date().toISOString(),
             }, null, 2))'
           cat latest.json
-          gh release create "$TAG" Momentum.apk web.zip latest.json --repo "$REPO" \
+          gh release create "$TAG" Momentum.apk web.zip pwa.json.gz latest.json --repo "$REPO" \
             --title "Momentum $VERSION" --notes "$NOTES" --latest
 
       - name: Alte Releases aufräumen (die letzten 10 bleiben)

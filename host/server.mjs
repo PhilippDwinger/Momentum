@@ -2,24 +2,34 @@
 /**
  * Momentum-Host – runs on your PC next to Bridge (nothing in Bridge is changed).
  *
- *  1. serves the built app (dist/) – put it behind `tailscale serve` for HTTPS on the phone
- *  2. forwards /bridge/* 1:1 to the Bridge server. Bridge sends no CORS headers, so a browser
- *     can only talk to it through the same origin. The host does NOT sync anything itself –
- *     the devices talk to each other through Bridge.
+ *  1. serves the browser app under the Bridge address: https://muttchen.tail91b057.ts.net:8443/momentum/
+ *     (Tailscale maps the path /momentum of Bridge's port to this host, set up automatically).
+ *     Same address as Bridge = the browser may talk to Bridge directly (Bridge sends no CORS
+ *     headers, so from any other address it could not). The host does NOT sync anything – the
+ *     devices talk to each other through Bridge.
+ *  2. keeps the app up to date: downloads every new build from GitHub Releases (pwa.json.gz,
+ *     sha256-checked); open apps update themselves ("Aktualisieren").
  *  3. sends Web Push notifications. Devices upload their notification plan (texts are generated
  *     on the device), the host delivers each item at its time – also when the app is closed.
+ *  4. /bridge/* = 1:1 forwarding to Bridge for app copies opened elsewhere (e.g. http://localhost:5180).
  *
  * Config via environment variables (defaults in brackets):
  *   MOMENTUM_PORT   [5180]           MOMENTUM_BIND [127.0.0.1]
  *   BRIDGE_URL      [https://muttchen.tail91b057.ts.net:8443]
  *   MOMENTUM_DIST   [<repo>/dist]    MOMENTUM_DATA [<repo>/host/data]
+ *   MOMENTUM_UPDATE_URL [GitHub latest.json of PhilippDwinger/Momentum; '' = off]
+ *   MOMENTUM_UPDATE_SECONDS [300]    MOMENTUM_TAILSCALE [auto on Windows, off elsewhere]
  *   MOMENTUM_PUSH_DRYRUN=1           log pushes instead of sending (tests)
+ *   MOMENTUM_ROOT_PROXY=1            tests: everything outside /momentum goes to Bridge (like Tailscale)
  */
 import { createServer } from 'node:http'
-import { readFile, writeFile, rename, mkdir, stat } from 'node:fs/promises'
+import { readFile, writeFile, rename, mkdir, stat, readdir, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join, extname, normalize, resolve, dirname } from 'node:path'
+import { join, extname, normalize, resolve, dirname, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
+import { gunzipSync } from 'node:zlib'
+import { execFile } from 'node:child_process'
 import webpush from 'web-push'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -30,8 +40,13 @@ const cfg = {
   dist: resolve(process.env.MOMENTUM_DIST || join(here, '..', 'dist')),
   data: resolve(process.env.MOMENTUM_DATA || join(here, 'data')),
   dryRun: process.env.MOMENTUM_PUSH_DRYRUN === '1',
+  updateUrl: process.env.MOMENTUM_UPDATE_URL ?? 'https://github.com/PhilippDwinger/Momentum/releases/latest/download/latest.json',
+  updateEvery: Math.max(5, Number(process.env.MOMENTUM_UPDATE_SECONDS || 300)) * 1000,
+  tailscale: process.env.MOMENTUM_TAILSCALE || (process.platform === 'win32' ? 'auto' : 'off'),
+  rootProxy: process.env.MOMENTUM_ROOT_PROXY === '1',
 }
-const VERSION = '1.1.0'
+const VERSION = '1.2.0'
+const MOUNT = '/momentum'
 const MAX_BODY = 2 * 1024 * 1024
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
 
@@ -142,6 +157,114 @@ function cleanItems(items) {
 }
 
 // ---------------------------------------------------------------------------
+// app files: newest build from GitHub (auto-update), otherwise the local dist/
+// ---------------------------------------------------------------------------
+const webDir = join(cfg.data, 'web')
+let web = { build: 0, version: '', dir: null, checkedAt: 0, error: null }
+
+async function loadWebState() {
+  try {
+    const cur = JSON.parse(await readFile(join(webDir, 'current.json'), 'utf8'))
+    if (cur.dir && existsSync(join(cur.dir, 'index.html'))) web = { ...web, build: cur.build, version: cur.version, dir: cur.dir }
+  } catch {
+    /* none yet */
+  }
+}
+const webRoot = () => web.dir || cfg.dist
+
+const sha256 = (buf) => createHash('sha256').update(buf).digest('hex')
+
+async function checkWebUpdate() {
+  if (!cfg.updateUrl) return
+  web.checkedAt = Date.now()
+  try {
+    const r = await fetch(`${cfg.updateUrl}${cfg.updateUrl.includes('?') ? '&' : '?'}t=${Date.now()}`, { headers: { 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(20_000) })
+    if (!r.ok) throw new Error(`latest.json HTTP ${r.status}`)
+    const latest = await r.json()
+    if (!Number.isInteger(latest.build) || typeof latest.pwa !== 'string' || !/^[0-9a-f]{64}$/.test(latest.pwaSha256 || '')) throw new Error('latest.json ohne Web-Version')
+    if (latest.build <= web.build) {
+      web.error = null
+      return
+    }
+    const z = await fetch(latest.pwa, { signal: AbortSignal.timeout(90_000) })
+    if (!z.ok) throw new Error(`pwa.json.gz HTTP ${z.status}`)
+    const buf = Buffer.from(await z.arrayBuffer())
+    if (sha256(buf) !== latest.pwaSha256) throw new Error('Prüfsumme stimmt nicht')
+    const pack = JSON.parse(gunzipSync(buf).toString('utf8'))
+    if (pack.format !== 'momentum-web-1' || !pack.files?.['index.html']) throw new Error('unbekanntes Paketformat')
+    const dir = join(webDir, `build-${latest.build}`)
+    await rm(dir, { recursive: true, force: true })
+    for (const [rel, b64] of Object.entries(pack.files)) {
+      const target = normalize(join(dir, rel))
+      if (!target.startsWith(dir + sep) || rel.includes('..')) throw new Error(`unsicherer Pfad im Paket: ${rel}`)
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, Buffer.from(b64, 'base64'))
+    }
+    const prev = web.dir
+    web = { ...web, build: latest.build, version: latest.version || '', dir, error: null }
+    await writeFile(join(webDir, 'current.json'), JSON.stringify({ build: web.build, version: web.version, dir }))
+    log(`Neue App-Version ${web.version || web.build} geladen – offene Apps zeigen „Aktualisieren“`)
+    // keep the current and the previous build
+    for (const name of await readdir(webDir)) {
+      const p = join(webDir, name)
+      if (name.startsWith('build-') && p !== dir && p !== prev) await rm(p, { recursive: true, force: true })
+    }
+  } catch (e) {
+    web.error = e.message
+    log(`Update-Prüfung: ${e.message}`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tailscale: map https://<bridge-host>:<port>/momentum -> this host (Bridge itself unchanged)
+// ---------------------------------------------------------------------------
+let tsState = 'off'
+
+function tailscale(args) {
+  const exes = process.platform === 'win32' ? ['tailscale', 'C:\\Program Files\\Tailscale\\tailscale.exe'] : ['tailscale']
+  return new Promise((resolveRun, rejectRun) => {
+    const attempt = (i) =>
+      execFile(exes[i], args, { timeout: 20_000, windowsHide: true }, (err, stdout, stderr) => {
+        if (err && err.code === 'ENOENT' && i + 1 < exes.length) return attempt(i + 1)
+        if (err) return rejectRun(new Error((stderr || err.message).trim()))
+        resolveRun(stdout)
+      })
+    attempt(0)
+  })
+}
+
+async function ensureTailscale() {
+  if (cfg.tailscale === 'off') return
+  let bridge
+  try {
+    bridge = new URL(cfg.bridge)
+  } catch {
+    return
+  }
+  if (!bridge.hostname.endsWith('.ts.net')) return
+  const port = bridge.port || '443'
+  const hp = `${bridge.hostname}:${port}`
+  const target = `http://127.0.0.1:${cfg.port}`
+  try {
+    const status = JSON.parse((await tailscale(['serve', 'status', '--json'])) || '{}')
+    const handlers = status?.Web?.[hp]?.Handlers ?? {}
+    const mounted = Object.entries(handlers).find(([k]) => k.replace(/\/+$/, '') === MOUNT)
+    if (mounted && mounted[1]?.Proxy?.replace(/\/+$/, '') === target) {
+      tsState = 'ok'
+      return
+    }
+    // same visibility as Bridge's own port: public (Funnel) if Bridge is public, else tailnet only
+    const funnel = !!status?.AllowFunnel?.[hp]
+    await tailscale([funnel ? 'funnel' : 'serve', '--bg', `--https=${port}`, `--set-path=${MOUNT}`, target])
+    tsState = 'ok'
+    log(`Tailscale: ${bridge.origin}${MOUNT}/ -> ${target}${funnel ? ' (öffentlich, wie Bridge)' : ' (nur im Tailnet, wie Bridge)'}`)
+  } catch (e) {
+    if (tsState !== 'error') log(`Tailscale-Weiterleitung nicht eingerichtet (${e.message}). Von Hand: tailscale funnel --bg --https=${port} --set-path=${MOUNT} ${target}`)
+    tsState = 'error'
+  }
+}
+
+// ---------------------------------------------------------------------------
 // HTTP
 // ---------------------------------------------------------------------------
 const MIME = {
@@ -192,7 +315,14 @@ async function proxyBridge(req, res, path) {
 
 async function handleApi(req, res, path) {
   if (path === '/info') {
-    return send(res, 200, { app: 'momentum-host', version: VERSION, bridge: cfg.bridge, push: { publicKey: state.vapid.publicKey, dryRun: cfg.dryRun } })
+    return send(res, 200, {
+      app: 'momentum-host',
+      version: VERSION,
+      bridge: cfg.bridge,
+      web: { build: web.build, version: web.version, source: web.dir ? 'github' : 'local', checkedAt: web.checkedAt, error: web.error },
+      tailscale: tsState,
+      push: { publicKey: state.vapid.publicKey, dryRun: cfg.dryRun },
+    })
   }
   if (req.method !== 'POST') return send(res, 405, { error: 'POST required' })
   let body
@@ -244,46 +374,63 @@ async function handleApi(req, res, path) {
 }
 
 async function serveStatic(req, res, urlPath) {
-  let rel = decodeURIComponent(urlPath.split('?')[0])
+  const root = webRoot()
+  let rel = decodeURIComponent(urlPath)
   if (rel.endsWith('/')) rel += 'index.html'
-  const file = normalize(join(cfg.dist, rel))
-  if (!file.startsWith(cfg.dist)) return send(res, 403, 'forbidden')
+  const file = normalize(join(root, rel))
+  if (!file.startsWith(root)) return send(res, 403, 'forbidden')
   let target = file
   try {
     if (!(await stat(target)).isFile()) throw new Error('dir')
   } catch {
     if (extname(rel)) return send(res, 404, 'not found')
-    target = join(cfg.dist, 'index.html') // SPA fallback
+    target = join(root, 'index.html') // SPA fallback
   }
   try {
     const data = await readFile(target)
-    const name = target.slice(cfg.dist.length).replace(/\\/g, '/')
+    const name = target.slice(root.length).replace(/\\/g, '/')
     const cache = name.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'
     res.writeHead(200, { 'content-type': MIME[extname(target)] || 'application/octet-stream', 'cache-control': cache, 'x-content-type-options': 'nosniff' })
     res.end(req.method === 'HEAD' ? undefined : data)
   } catch {
-    send(res, 500, 'Die App ist noch nicht gebaut. Bitte zuerst "npm run build" ausführen.')
+    send(res, 503, 'Momentum wird gerade geladen (erste App-Version von GitHub). Bitte in einer Minute neu laden.')
   }
 }
 
 const server = createServer(async (req, res) => {
   const url = req.url || '/'
+  const q = url.indexOf('?')
+  let path = q >= 0 ? url.slice(0, q) : url
   try {
-    if (url === '/bridge' || url.startsWith('/bridge/')) return await proxyBridge(req, res, url.slice('/bridge'.length) || '/')
-    if (url.startsWith('/momentum-host/')) return await handleApi(req, res, url.slice('/momentum-host'.length).split('?')[0])
+    // the app lives under /momentum (Tailscale may or may not strip that prefix before forwarding)
+    if (path === MOUNT && req.method === 'GET') return send(res, 301, '', { location: `${MOUNT}/${q >= 0 ? url.slice(q) : ''}` })
+    let mounted = false
+    while (path === MOUNT || path.startsWith(`${MOUNT}/`)) {
+      path = path.slice(MOUNT.length) || '/'
+      mounted = true
+    }
+    if (cfg.rootProxy && !mounted) return await proxyBridge(req, res, url) // tests: Bridge at the root
+    if (path === '/bridge' || path.startsWith('/bridge/')) return await proxyBridge(req, res, path.slice('/bridge'.length) + (q >= 0 ? url.slice(q) : '') || '/')
+    if (path.startsWith('/momentum-host/')) return await handleApi(req, res, path.slice('/momentum-host'.length))
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed')
-    return await serveStatic(req, res, url)
+    return await serveStatic(req, res, path)
   } catch (e) {
     send(res, e.status || 500, { error: e.message })
   }
 })
 
 await loadState()
+await loadWebState()
 setInterval(() => tick().catch((e) => log('tick failed', e.message)), 15_000)
 server.listen(cfg.port, cfg.bind, () => {
   log(`Momentum-Host ${VERSION} läuft auf http://${cfg.bind}:${cfg.port}`)
-  log(`Bridge-Ziel: ${cfg.bridge}`)
-  log(`App-Dateien: ${cfg.dist}${existsSync(join(cfg.dist, 'index.html')) ? '' : '  (fehlen – npm run build!)'}`)
+  log(`Bridge: ${cfg.bridge}`)
+  if (/\.ts\.net/.test(cfg.bridge)) log(`Momentum im Browser (PC + Handy): ${cfg.bridge}${MOUNT}/`)
+  log(`App-Dateien: ${web.dir ? `GitHub-Version ${web.version || web.build}` : cfg.dist}`)
   if (cfg.dryRun) log('Push im Testmodus (dry-run)')
+  void ensureTailscale()
+  void checkWebUpdate()
+  setInterval(() => void checkWebUpdate(), cfg.updateEvery)
+  setInterval(() => void ensureTailscale(), 5 * 60 * 1000)
 })
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => saveNow().finally(() => process.exit(0)))

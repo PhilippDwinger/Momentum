@@ -1,7 +1,11 @@
 # CLAUDE.md – Momentum handover
 
 Personal habit & motivation planner. Local-first (React 19 + TS + Vite 8 + Dexie/IndexedDB).
-Phone = Android app (Capacitor 8, `android/`, auto-update from GitHub Releases); PC = browser via Momentum-Host.
+Main use (Paddy's phone has a parental lock that blocks APKs): browser PWA at
+https://muttchen.tail91b057.ts.net:8443/momentum/ – same origin as Bridge, so it talks to Bridge
+DIRECTLY. Tailscale maps the path /momentum of port 8443 to the Momentum-Host (127.0.0.1:5180) on
+Paddy's PC; the host serves the app (auto-downloaded from GitHub Releases: pwa.json.gz), sends Web
+Push and sets up the Tailscale path itself. Android app (Capacitor) exists as alternative.
 Owner: Paddy. UI default language German (de), English available. Reply to Paddy in German.
 
 ## Commands
@@ -17,11 +21,12 @@ npx tsx e2e/make-demo.ts 2026-11-03 # regenerate demo fixture for a given "today
 npm start                           # build + Momentum-Host on :5180 (static + /bridge proxy + push)
 npm run build:app && npx cap sync android   # web bundle for the Android app (no SW)
 BRIDGE_TEST_URL=http://127.0.0.1:8002 npm test   # sync tests against a real Bridge
+BRIDGE_TEST_URL=http://127.0.0.1:8002 node e2e/run-direct.mjs  # /momentum/ + direct Bridge + host auto-update
 ```
 
-All of these passed at handover v1.2 (80 unit tests incl. 10 sync scenarios on an in-memory Bridge,
+All of these passed at handover v1.2.x (80 unit tests incl. 10 sync scenarios on an in-memory Bridge,
 8 of them also against a real Bridge 3 server copy; 11/11 E2E incl. two-browser sync via host +
-real Bridge; lint + typecheck clean). The test Bridge copy dies when a cloud turn ends – restart it
+real Bridge; 5/5 run-direct; lint + typecheck clean). The test Bridge copy dies when a cloud turn ends – restart it
 (`/home/claude/bridge-local`, PORT=8002) before real-Bridge runs, or E2E sync fails with 502. Note: Bridge allows 30 registrations/hour per address –
 repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bridge.
 
@@ -34,8 +39,11 @@ repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bri
 - `src/sync/bridge/` device-to-device sync over Bridge (engine, api, crypto, instance). Bridge is
   pull-only + RAM-only; devices find each other via a hashed topic in the public realm and
   exchange encrypted direct messages. NEVER change Bridge (Paddy's rule) – only use its client API.
-- `host/server.mjs` Momentum-Host: serves dist, proxies `/bridge/*` (Bridge has no CORS), Web Push
-  (VAPID keys + plans in `host/data/push-state.json`, scheduler every 15 s).
+- `host/server.mjs` Momentum-Host: serves the app under /momentum (prefix stripped either way),
+  auto-updates it from GitHub (`host/data/web/build-<n>`, sha256), ensures the Tailscale path
+  (`tailscale serve status --json`, funnel only if Bridge's port is funneled), Web Push (VAPID keys +
+  plans in `host/data/push-state.json`, scheduler every 15 s), `/bridge/*` proxy for other origins.
+  `MOMENTUM_ROOT_PROXY=1` (tests) = Bridge at the root like Tailscale.
 - `src/domain/notifications.ts` motivational texts (de/en × gentle/motivating/intense) + push plan.
 - `src/sync/SyncService.ts`/`BridgeSyncAdapter.ts` = unused central-store alternative.
 - `src/platform/` Android layer: `native.ts` (IS_NATIVE, nativeFetch via CapacitorHttp – Bridge has
@@ -69,6 +77,11 @@ repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bri
   package.json (and `minNative` if the web code needs it). APK versionCode = native*100000 + run no.
 - Never commit `signing/` (release keystore; also stored as GitHub secrets).
 - Capgo `download()` REQUIRES a sha256 checksum (CI writes it to latest.json).
+- Browser app must stay relative (`base: './'`) – it lives under /momentum/. index.html redirects
+  `/momentum` → `/momentum/`. SW uses clientsClaim; `usePwa.update()` reloads itself on
+  controllerchange (vite-plugin-pwa only reloads if the page was controlled at start).
+- Update test sentence at the bottom of Settings (`settings.updateTest`) – Paddy uses it to see
+  that updates arrive. Change its number when he asks for another test.
 
 ## Status / next steps
 
@@ -85,5 +98,7 @@ repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bri
 - Delivery flow used: commit in cloud → Momentum.zip (incl. .git + signing/) → extract into
   C:\Users\phili\Documents\Momentum via device shell → `git push` there with gh credential helper
   (deletion permission needed for git lock files).
+- v1.2.x (04.11.2026): browser app directly over Bridge under /momentum/, host auto-update from
+  GitHub, update-test text. Paddy's phone blocks APK installs (parental lock).
 - Ideas not built: built-in timer for duration activities, reordering activities by drag,
   field-level merge for activities.

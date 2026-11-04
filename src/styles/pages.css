@@ -1881,3 +1881,13 @@ code {
 .settings-group h2 .badge {
   font-weight: 700;
 }
+
+.update-test {
+  margin: 8px 4px 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  text-align: center;
+}
