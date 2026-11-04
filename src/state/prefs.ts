@@ -22,6 +22,8 @@ export interface Prefs {
   pushPlannedAt: number | null
   /** Android app: Bridge server (null = default) */
   bridgeUrl: string | null
+  /** "Später" on the install banner */
+  installDismissedAt: number | null
 }
 
 const KEY = 'momentum.prefs.v1'
@@ -40,6 +42,7 @@ const defaults = (): Prefs => ({
   pushPlanned: null,
   pushPlannedAt: null,
   bridgeUrl: null,
+  installDismissedAt: null,
 })
 
 function load(): Prefs {

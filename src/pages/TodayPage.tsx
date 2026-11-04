@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Lightbulb, Plus, Sparkles, Sprout, Wand2 } from 'lucide-react'
 import { OccurrenceList } from '../components/Checklist'
+import { InstallBanner } from '../components/InstallPrompt'
 import { ProgressRing } from '../components/Progress'
 import { useOccurrenceActions } from '../components/useOccurrenceActions'
 import { ChallengeList, StreakList, WeekStrip } from '../components/Widgets'
@@ -94,6 +95,7 @@ export function TodayPage() {
 
       <div className="today-grid">
         <div className="today-main">
+          <InstallBanner />
           {noActivities ? (
             <section className="surface welcome">
               <div className="welcome-art" aria-hidden>

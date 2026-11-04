@@ -24,7 +24,7 @@ mkdirSync(OUT, { recursive: true })
 // Sync tests need a Bridge server: BRIDGE_TEST_URL=http://127.0.0.1:8002 npm run test:e2e
 const BRIDGE = process.env.BRIDGE_TEST_URL
 const host = spawn(process.execPath, [join(here, '..', 'host', 'server.mjs')], {
-  env: { ...process.env, MOMENTUM_PORT: '4199', BRIDGE_URL: BRIDGE || 'http://127.0.0.1:9', MOMENTUM_DATA: mkdtempSync(join(tmpdir(), 'momentum-host-')), MOMENTUM_PUSH_DRYRUN: '1' },
+  env: { ...process.env, MOMENTUM_PORT: '4199', BRIDGE_URL: BRIDGE || 'http://127.0.0.1:9', MOMENTUM_DATA: mkdtempSync(join(tmpdir(), 'momentum-host-')), MOMENTUM_PUSH_DRYRUN: '1', MOMENTUM_UPDATE_URL: '', MOMENTUM_TAILSCALE: 'off' },
   stdio: ['ignore', 'pipe', 'inherit'],
 })
 await new Promise((resolve) => host.stdout.on('data', (d) => String(d).includes('läuft') && resolve()))
@@ -372,6 +372,41 @@ await test('notification "done" action and time zone setting', async () => {
   await page.getByText('Push-Benachrichtigungen').waitFor()
   const info = await page.evaluate(async () => (await fetch('momentum-host/info')).json())
   expect(info.app === 'momentum-host' && info.push.publicKey.length > 40, 'host info missing')
+  await ctx.close()
+})
+
+await test('install: banner + guide on the phone, early install event is not lost', async () => {
+  // 1) Chrome offers no install dialog -> the button shows the guide for the browser menu
+  const a = await newPage({ ...devices['Pixel 7'] })
+  await a.page.getByText('Momentum als App installieren').first().waitFor()
+  await a.page.screenshot({ path: join(OUT, 'install-banner.png') })
+  await a.page.locator('.install-banner').getByRole('button', { name: 'Installieren', exact: true }).click()
+  const guide = a.page.getByRole('dialog', { name: 'Momentum als App installieren' })
+  await guide.waitFor()
+  await guide.getByText('„App installieren“ wählen', { exact: false }).waitFor()
+  await guide.getByRole('button', { name: 'Fertig' }).click()
+  await guide.waitFor({ state: 'detached' })
+  // "Später" hides the banner
+  await a.page.locator('.install-banner').getByRole('button', { name: 'Später' }).click()
+  await a.page.locator('.install-banner').waitFor({ state: 'detached' })
+  await a.ctx.close()
+
+  // 2) Chrome fires beforeinstallprompt BEFORE the app has booted (repeat visit) -> still usable
+  const ctx = await browser.newContext({ ...devices['Pixel 7'], locale: 'de-DE', timezoneId: 'Europe/Berlin' })
+  await ctx.addInitScript(() => {
+    document.addEventListener('readystatechange', () => {
+      if (document.readyState !== 'interactive') return
+      const e = new Event('beforeinstallprompt')
+      Object.assign(e, { prompt: async () => (window.__prompted = true), userChoice: Promise.resolve({ outcome: 'accepted' }) })
+      window.dispatchEvent(e)
+    })
+  })
+  const page = await ctx.newPage()
+  await page.goto(BASE)
+  await page.locator('.install-banner').getByRole('button', { name: 'Installieren', exact: true }).click()
+  await page.getByText('Momentum ist installiert').waitFor()
+  expect(await page.evaluate(() => window.__prompted === true), 'install prompt was not used')
+  await page.locator('.install-banner').waitFor({ state: 'detached' })
   await ctx.close()
 })
 

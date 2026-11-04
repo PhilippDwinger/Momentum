@@ -7,6 +7,7 @@ import { buildExport, downloadFile, occurrencesCsv } from '../data/exportImport'
 import type { UserSettings } from '../domain/types'
 import { isStandalone, usePwa, useStoragePersisted } from '../hooks/usePwa'
 import { AppUpdatePanel } from '../components/AppUpdatePanel'
+import { InstallButton } from '../components/InstallPrompt'
 import { IS_NATIVE } from '../platform/native'
 import { APP_BUILD, APP_VERSION } from '../platform/updater'
 import { useI18n, type Lang } from '../i18n'
@@ -221,17 +222,11 @@ export function SettingsPage() {
         <h2><MonitorSmartphone size={17} aria-hidden /> {t('settings.app')}</h2>
         {isStandalone() ? (
           <p className="small">{t('settings.installed')}</p>
-        ) : pwa.installEvent ? (
-          <div className="setting-row">
-            <span className="field-hint">{t('settings.installHint')}</span>
-            <button className="btn btn-primary btn-sm" onClick={() => void pwa.installEvent?.prompt()}>
-              {t('settings.install')}
-            </button>
-          </div>
-        ) : ios ? (
-          <p className="field-hint">{t('settings.installIos')}</p>
         ) : (
-          <p className="field-hint">{t('settings.installHint')}</p>
+          <div className="setting-row">
+            <span className="field-hint">{ios ? t('settings.installIos') : t('settings.installHint')}</span>
+            <InstallButton />
+          </div>
         )}
         {pwa.offlineReady && <p className="small" style={{ marginTop: 8 }}><span className="badge success">{t('settings.offlineReady')}</span></p>}
         <p className="field-hint" style={{ marginTop: 8 }}>{t('settings.autoUpdate')}</p>

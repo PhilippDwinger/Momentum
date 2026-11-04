@@ -14,22 +14,32 @@ interface PwaState {
   needRefresh: boolean
   offlineReady: boolean
   installEvent: BeforeInstallPromptEvent | null
+  /** set after a successful install in this session */
+  installed: boolean
   update: (() => Promise<void>) | null
 }
 
-let state: PwaState = { needRefresh: false, offlineReady: false, installEvent: null, update: null }
+let state: PwaState = { needRefresh: false, offlineReady: false, installEvent: null, installed: false, update: null }
 const listeners = new Set<() => void>()
 const set = (patch: Partial<PwaState>) => {
   state = { ...state, ...patch }
   listeners.forEach((l) => l())
 }
 
+type InstallWindow = Window & { __momentumInstall?: BeforeInstallPromptEvent | null }
+
 export async function initPwa() {
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault()
-    set({ installEvent: e as BeforeInstallPromptEvent })
+  // the event is captured by an inline script in index.html (it can fire before the app booted)
+  const pick = () => {
+    const e = (window as InstallWindow).__momentumInstall
+    if (e) set({ installEvent: e })
+  }
+  pick()
+  window.addEventListener('momentum-installable', pick)
+  window.addEventListener('appinstalled', () => {
+    ;(window as InstallWindow).__momentumInstall = null
+    set({ installEvent: null, installed: true })
   })
-  window.addEventListener('appinstalled', () => set({ installEvent: null }))
   if (!('serviceWorker' in navigator) || import.meta.env.DEV) return
   try {
     const { registerSW } = await import('virtual:pwa-register')
@@ -80,6 +90,26 @@ export function usePwa(): PwaState {
     },
     () => state,
   )
+}
+
+/**
+ * Shows Chrome's install dialog. Returns 'accepted' | 'dismissed', or 'manual' when the browser
+ * offers no dialog right now (then the user installs via the browser menu).
+ */
+export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'manual'> {
+  const e = state.installEvent
+  if (!e) return 'manual'
+  // the event can only be used once
+  set({ installEvent: null })
+  ;(window as InstallWindow).__momentumInstall = null
+  try {
+    await e.prompt()
+    const choice = await e.userChoice
+    if (choice.outcome === 'accepted') set({ installed: true })
+    return choice.outcome
+  } catch {
+    return 'manual'
+  }
 }
 
 export function isStandalone(): boolean {

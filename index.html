@@ -21,6 +21,15 @@
       })()
     </script>
     <script>
+      // Chrome fires "beforeinstallprompt" as soon as the page is installable – on repeat visits
+      // that can be before the app has booted. Keep it so the "Installieren" button always works.
+      window.__momentumInstall = null
+      window.addEventListener('beforeinstallprompt', function (e) {
+        window.__momentumInstall = e
+        window.dispatchEvent(new Event('momentum-installable'))
+      })
+    </script>
+    <script>
       // Apply theme before first paint to avoid a flash.
       ;(function () {
         try {

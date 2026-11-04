@@ -26,7 +26,7 @@ BRIDGE_TEST_URL=http://127.0.0.1:8002 node e2e/run-direct.mjs  # /momentum/ + di
 
 All of these passed at handover v1.2.x (80 unit tests incl. 10 sync scenarios on an in-memory Bridge,
 8 of them also against a real Bridge 3 server copy; 11/11 E2E incl. two-browser sync via host +
-real Bridge; 5/5 run-direct; lint + typecheck clean). The test Bridge copy dies when a cloud turn ends – restart it
+real Bridge; 12/12 run-e2e, 5/5 run-direct; lint + typecheck clean). The test Bridge copy dies when a cloud turn ends – restart it
 (`/home/claude/bridge-local`, PORT=8002) before real-Bridge runs, or E2E sync fails with 502. Note: Bridge allows 30 registrations/hour per address –
 repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bridge.
 
@@ -81,7 +81,12 @@ repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bri
   `/momentum` → `/momentum/`. SW uses clientsClaim; `usePwa.update()` reloads itself on
   controllerchange (vite-plugin-pwa only reloads if the page was controlled at start).
 - Update test sentence at the bottom of Settings (`settings.updateTest`) – Paddy uses it to see
-  that updates arrive. Change its number when he asks for another test.
+  that updates arrive. Change its number when he asks for another test (now: 2).
+- `beforeinstallprompt` is captured by an inline script in index.html (on repeat visits Chrome
+  fires it before the app booted – that lost the install button once). Install banner on Today +
+  button in Settings; without the event they show a menu guide (`components/InstallPrompt.tsx`).
+- Test hosts must run with `MOMENTUM_UPDATE_URL=''` – otherwise they download the real GitHub
+  build and the tests silently run against old code.
 
 ## Status / next steps
 
@@ -100,5 +105,6 @@ repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bri
   (deletion permission needed for git lock files).
 - v1.2.x (04.11.2026): browser app directly over Bridge under /momentum/, host auto-update from
   GitHub, update-test text. Paddy's phone blocks APK installs (parental lock).
+- 05.11.2026: Paddy removed the installed PWA and could not reinstall → install fix (above).
 - Ideas not built: built-in timer for duration activities, reordering activities by drag,
   field-level merge for activities.
