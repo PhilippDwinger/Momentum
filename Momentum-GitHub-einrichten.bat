@@ -5,7 +5,7 @@ cd /d "%~dp0"
 echo.
 echo  Momentum auf GitHub einrichten (einmalig)
 echo  -----------------------------------------
-echo  Legt das Repo "momentum-app" in deinem GitHub-Konto an, hinterlegt den
+echo  Legt das Repo "Momentum" in deinem GitHub-Konto an, hinterlegt den
 echo  Signatur-Schluessel als Secret und laedt den Code hoch. GitHub baut danach
 echo  automatisch die Android-App (Momentum.apk).
 echo.
@@ -39,22 +39,22 @@ gh auth setup-git || goto :fehler
 for /f "delims=" %%u in ('gh api user --jq .login') do set "GHUSER=%%u"
 if "%GHUSER%"=="" goto :fehler
 echo  GitHub-Konto: %GHUSER%
-gh repo view "%GHUSER%/momentum-app" >nul 2>nul
+gh repo view "%GHUSER%/Momentum" >nul 2>nul
 if errorlevel 1 (
-  gh repo create momentum-app --public --description "Momentum - Habit- und Motivationsplaner (Android-App)" || goto :fehler
+  gh repo create Momentum --public --description "Momentum - Habit- und Motivationsplaner (Android-App)" || goto :fehler
 )
-gh secret set ANDROID_KEYSTORE_B64 --repo "%GHUSER%/momentum-app" < signing\momentum-release.jks.b64 || goto :fehler
-gh secret set ANDROID_KEYSTORE_PASSWORD --repo "%GHUSER%/momentum-app" < signing\keystore-passwort.txt || goto :fehler
+gh secret set ANDROID_KEYSTORE_B64 --repo "%GHUSER%/Momentum" < signing\momentum-release.jks.b64 || goto :fehler
+gh secret set ANDROID_KEYSTORE_PASSWORD --repo "%GHUSER%/Momentum" < signing\keystore-passwort.txt || goto :fehler
 git config --global --add safe.directory "%CD:\=/%"
 git remote remove origin >nul 2>nul
-git remote add origin "https://github.com/%GHUSER%/momentum-app.git" || goto :fehler
+git remote add origin "https://github.com/%GHUSER%/Momentum.git" || goto :fehler
 git push -u origin master || goto :fehler
 echo.
 echo  Fertig! GitHub baut jetzt die App (ca. 5-10 Minuten):
-echo    https://github.com/%GHUSER%/momentum-app/actions
+echo    https://github.com/%GHUSER%/Momentum/actions
 echo  Danach auf dem Handy oeffnen und Momentum.apk installieren:
-echo    https://github.com/%GHUSER%/momentum-app/releases/latest
-start "" "https://github.com/%GHUSER%/momentum-app/actions"
+echo    https://github.com/%GHUSER%/Momentum/releases/latest
+start "" "https://github.com/%GHUSER%/Momentum/actions"
 echo.
 pause
 goto :eof

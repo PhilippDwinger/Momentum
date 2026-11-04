@@ -75,7 +75,7 @@ repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bri
 - v1.1 (04.11.2026): timezone setting, sync over Bridge (Sync-ID groups, initial choice
   merge/theirs/mine, conflicts), Momentum-Host, Web Push with motivational texts.
 - v1.2 (04.11.2026): Android app (APK) talking to Bridge directly, local notifications, auto-update
-  via GitHub Releases (repo `momentum-app`, public). Paddy wants the phone app as a downloaded file,
+  via GitHub Releases (repo `Momentum`, public). Paddy wants the phone app as a downloaded file,
   not a website via Tailscale.
 - Publishing from a cloud session: the cloud proxy blocks GitHub auth/repo creation; use the linked
   PC's device shell (gh in ~/tools, device-code login by Paddy) or Paddy's `Momentum-veroeffentlichen.bat`.

@@ -82,7 +82,7 @@ Auf dem Handy ist Momentum eine **echte Android-App (APK)**. Sie läuft ohne PC 
 
 **Installieren**
 
-1. Auf dem Handy in Chrome **https://github.com/@@OWNER@@/momentum-app/releases/latest** öffnen →
+1. Auf dem Handy in Chrome **https://github.com/PhilippDwinger/Momentum/releases/latest** öffnen →
    `Momentum.apk` antippen → herunterladen.
 2. Datei öffnen → Android fragt einmal, ob Chrome Apps installieren darf → *Zulassen* → *Installieren*.
    (Play Protect kann warnen, weil die App nicht aus dem Play Store kommt → „Trotzdem installieren“.)
@@ -103,7 +103,7 @@ Auf dem Handy ist Momentum eine **echte Android-App (APK)**. Sie läuft ohne PC 
 
 **Einmalige GitHub-Einrichtung** (falls noch nicht geschehen): Doppelklick auf
 `Momentum-GitHub-einrichten.bat`. Sie installiert bei Bedarf Git und GitHub CLI, meldet dich im
-Browser an, legt das öffentliche Repo `momentum-app` an, hinterlegt den Signatur-Schlüssel aus
+Browser an, legt das öffentliche Repo `Momentum` an, hinterlegt den Signatur-Schlüssel aus
 `signing\` als Secret und lädt alles hoch. Details: [`docs/ANDROID.md`](docs/ANDROID.md).
 
 **Wichtig:** Den Ordner `signing\` (Signatur-Schlüssel) sichern und nie hochladen. Ohne ihn kann
