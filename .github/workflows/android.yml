@@ -1,3 +1,4 @@
+# Repo: https://github.com/PhilippDwinger/Momentum
 # Baut bei jedem Push die Android-App und veröffentlicht sie als GitHub-Release.
 # Die installierte App holt sich darüber automatisch die neue Version (src/platform/updater.ts):
 #   web.zip      -> stilles Update der App-Oberfläche (Prüfsumme sha256 in latest.json)
