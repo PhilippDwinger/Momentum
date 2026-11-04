@@ -4,7 +4,7 @@ cd /d "%~dp0"
 echo.
 echo  Momentum-Host  (App + Bridge-Weiterleitung + Push)
 echo  ------------------------------------------------
-if not exist node_modules (
+if not exist node_modules\web-push\package.json (
   echo  Installiere Abhaengigkeiten ...
   call npm install || goto :fehler
 )
