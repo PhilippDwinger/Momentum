@@ -80,6 +80,10 @@ repeated real-Bridge test runs can hit `TOO_MANY_ATTEMPTS`; restart the test Bri
 - Publishing from a cloud session: the cloud proxy blocks GitHub auth/repo creation; use the linked
   PC's device shell (gh in ~/tools, device-code login by Paddy) or Paddy's `Momentum-veroeffentlichen.bat`.
 - APK cannot be built in the cloud sandbox (Google Maven blocked) – CI is the build; check
-  Actions after every push.
+  Actions after every push. build-1 (04.11.2026) green; APK signature + baked update URL verified.
+  Not yet tested on a real phone.
+- Delivery flow used: commit in cloud → Momentum.zip (incl. .git + signing/) → extract into
+  C:\Users\phili\Documents\Momentum via device shell → `git push` there with gh credential helper
+  (deletion permission needed for git lock files).
 - Ideas not built: built-in timer for duration activities, reordering activities by drag,
   field-level merge for activities.

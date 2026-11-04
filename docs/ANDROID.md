@@ -76,5 +76,7 @@ npx cap open android
 
 - Sync läuft nur, solange die App offen ist (Android pausiert Hintergrund-Apps). Änderungen
   anderer Geräte kommen beim nächsten Öffnen.
-- Die APK wurde in der Cloud-Sitzung nicht gebaut (kein Zugriff auf Googles Maven) – der erste
-  echte Build ist der auf GitHub.
+- Gebaut wird nur auf GitHub (die Cloud-Sitzung hat keinen Zugriff auf Googles Maven). Erster
+  Build `build-1` am 04.11.2026 erfolgreich: APK mit dem eigenen Schlüssel signiert, Update-URL und
+  Version eingebaut, `web.zip`-Prüfsumme stimmt mit `latest.json` überein.
+- Auf einem echten Handy noch nicht getestet (kein Emulator in der Sitzung).
